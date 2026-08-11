@@ -1,0 +1,65 @@
+CREATE COMPUTE MODULE CurrencyApi_BuildRatesResponse
+	-- Building an object keyed by (dynamic) currency code through the
+	-- normal tree API turned out to be a dead end in this ACE version:
+	-- ".(expr)" is an *array-index* operator (it requires an INTEGER),
+	-- not a dynamic-field-name operator, and looping with numeric
+	-- array indices produced malformed/duplicated JSON on output. So
+	-- the "rates" object is built as plain text and emitted as the
+	-- response body directly, sidestepping the tree serializer for
+	-- this one field.
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE base CHARACTER Environment.CurrencyApi.fromCcy;
+
+		DECLARE baseToEur DECIMAL 1;
+		IF base <> 'EUR' THEN
+			DECLARE findRef REFERENCE TO Environment.CurrencyApi.rates.*[1];
+			WHILE LASTMOVE(findRef) DO
+				IF FIELDNAME(findRef) = base THEN
+					SET baseToEur = CAST(FIELDVALUE(findRef) AS DECIMAL);
+				END IF;
+				MOVE findRef NEXTSIBLING;
+			END WHILE;
+		END IF;
+
+		DECLARE ratesJson CHARACTER '';
+		DECLARE isFirst BOOLEAN TRUE;
+		DECLARE ref REFERENCE TO Environment.CurrencyApi.rates.*[1];
+		WHILE LASTMOVE(ref) DO
+			DECLARE ccy CHARACTER FIELDNAME(ref);
+			IF ccy <> base THEN
+				IF NOT isFirst THEN
+					SET ratesJson = ratesJson || ',';
+				END IF;
+				SET ratesJson = ratesJson || '"' || ccy || '":'
+					|| CAST(ROUND(CAST(FIELDVALUE(ref) AS DECIMAL) / baseToEur, 6) AS CHARACTER);
+				SET isFirst = FALSE;
+			END IF;
+			MOVE ref NEXTSIBLING;
+		END WHILE;
+
+		IF base <> 'EUR' THEN
+			IF NOT isFirst THEN
+				SET ratesJson = ratesJson || ',';
+			END IF;
+			SET ratesJson = ratesJson || '"EUR":' || CAST(ROUND(1 / baseToEur, 6) AS CHARACTER);
+		END IF;
+
+		DECLARE bodyText CHARACTER
+			'{"base":"' || base || '"'
+			|| ',"date":"' || Environment.CurrencyApi.ratesDate || '"'
+			|| ',"cached":' || LOWER(CAST(Environment.CurrencyApi.cacheHit AS CHARACTER))
+			|| ',"rates":{' || ratesJson || '}}';
+
+		SET OutputRoot.Properties = InputRoot.Properties;
+		SET OutputRoot.Properties.MessageDomain = 'BLOB';
+		SET OutputRoot.Properties.ReplyProtocol = 'HTTP';
+		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
+		SET OutputRoot.HTTPResponseHeader."Cache-Control" = 'no-store';
+		SET OutputRoot.HTTPResponseHeader."Access-Control-Allow-Origin" = '*';
+		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 200;
+		SET OutputRoot.BLOB.BLOB = CAST(bodyText AS BLOB CCSID 1208 ENCODING 546);
+
+		RETURN TRUE;
+	END;
+END MODULE;

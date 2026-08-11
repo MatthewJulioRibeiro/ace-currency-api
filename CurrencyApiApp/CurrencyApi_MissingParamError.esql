@@ -6,6 +6,7 @@ CREATE COMPUTE MODULE CurrencyApi_MissingParamError
 		SET OutputRoot.Properties.ReplyProtocol = 'HTTP';
 		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
 		SET OutputRoot.HTTPResponseHeader."Cache-Control" = 'no-store';
+		SET OutputRoot.HTTPResponseHeader."Access-Control-Allow-Origin" = '*';
 		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 400;
 		SET OutputRoot.JSON.Data.error = COALESCE(Environment.CurrencyApi.errorCode, 'MISSING_PARAM');
 		SET OutputRoot.JSON.Data.message = COALESCE(Environment.CurrencyApi.errorMessage,

@@ -1,0 +1,38 @@
+CREATE COMPUTE MODULE CurrencyApi_CheckRatesParam
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE queryString CHARACTER COALESCE(InputRoot.HTTPInputHeader."X-Query-String", '');
+		DECLARE base CHARACTER UPPER(TRIM(GetQueryParam(queryString, 'base')));
+
+		IF base = '' THEN
+			SET Environment.CurrencyApi.errorCode = 'MISSING_PARAM';
+			SET Environment.CurrencyApi.errorMessage = 'Informe base (codigo ISO de moeda), ex: ?base=USD';
+			THROW USER EXCEPTION MESSAGE 9001 VALUES('MISSING_PARAM', 'base is a required query param');
+		END IF;
+
+		SET Environment.CurrencyApi.fromCcy = base;
+
+		RETURN TRUE;
+	END;
+
+	CREATE FUNCTION GetQueryParam(IN qs CHARACTER, IN pkey CHARACTER) RETURNS CHARACTER
+	BEGIN
+		DECLARE searchKey CHARACTER pkey || '=';
+		DECLARE startPos INTEGER POSITION(searchKey IN qs);
+		DECLARE valueStart INTEGER;
+		DECLARE remainder CHARACTER;
+		DECLARE ampPos INTEGER;
+		DECLARE result CHARACTER '';
+		IF startPos > 0 THEN
+			SET valueStart = startPos + LENGTH(searchKey);
+			SET remainder = SUBSTRING(qs FROM valueStart);
+			SET ampPos = POSITION('&' IN remainder);
+			IF ampPos = 0 THEN
+				SET result = remainder;
+			ELSE
+				SET result = SUBSTRING(remainder FROM 1 FOR ampPos - 1);
+			END IF;
+		END IF;
+		RETURN result;
+	END;
+END MODULE;

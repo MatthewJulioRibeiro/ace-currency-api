@@ -1,30 +1,50 @@
 CREATE COMPUTE MODULE CurrencyApi_BuildResponse
+	-- The single WSRequest node in this flow can only ever hit the one
+	-- static URL configured on it (this ACE install's WSRequest node
+	-- does not honour a dynamic Destination override the way the docs
+	-- describe -- confirmed by testing, not assumed). So instead of
+	-- asking the upstream API for one specific pair, every request
+	-- fetches the same EUR-based bulk rates (cached, see
+	-- CurrencyApi_Cache) and the from/to conversion is *computed here*
+	-- by triangulating through EUR: rate(from,to) = eur[to] / eur[from].
 	CREATE FUNCTION Main() RETURNS BOOLEAN
 	BEGIN
 		DECLARE toCcy CHARACTER Environment.CurrencyApi.toCcy;
 		DECLARE fromCcy CHARACTER Environment.CurrencyApi.fromCcy;
 		DECLARE amountIn DECIMAL CAST(Environment.CurrencyApi.amount AS DECIMAL);
 
-		DECLARE rate DECIMAL;
-		DECLARE ratesRef REFERENCE TO InputRoot.JSON.Data.rates.*[1];
-		WHILE LASTMOVE(ratesRef) DO
-			IF FIELDNAME(ratesRef) = toCcy THEN
-				SET rate = CAST(FIELDVALUE(ratesRef) AS DECIMAL);
+		DECLARE fromToEur DECIMAL 1;
+		DECLARE toToEur DECIMAL 1;
+		DECLARE foundFrom BOOLEAN (fromCcy = 'EUR');
+		DECLARE foundTo BOOLEAN (toCcy = 'EUR');
+
+		DECLARE ref REFERENCE TO Environment.CurrencyApi.rates.*[1];
+		WHILE LASTMOVE(ref) DO
+			IF FIELDNAME(ref) = fromCcy THEN
+				SET fromToEur = CAST(FIELDVALUE(ref) AS DECIMAL);
+				SET foundFrom = TRUE;
 			END IF;
-			MOVE ratesRef NEXTSIBLING;
+			IF FIELDNAME(ref) = toCcy THEN
+				SET toToEur = CAST(FIELDVALUE(ref) AS DECIMAL);
+				SET foundTo = TRUE;
+			END IF;
+			MOVE ref NEXTSIBLING;
 		END WHILE;
 
-		IF rate IS NULL THEN
+		IF NOT foundFrom OR NOT foundTo THEN
 			SET Environment.CurrencyApi.errorCode = 'UNKNOWN_CURRENCY';
-			SET Environment.CurrencyApi.errorMessage = 'Codigo de moeda de destino desconhecido: ' || toCcy;
-			THROW USER EXCEPTION MESSAGE 9002 VALUES('UNKNOWN_CURRENCY', 'unknown target currency code');
+			SET Environment.CurrencyApi.errorMessage = 'Codigo de moeda desconhecido (from=' || fromCcy || ', to=' || toCcy || ')';
+			THROW USER EXCEPTION MESSAGE 9002 VALUES('UNKNOWN_CURRENCY', 'unknown currency code');
 		END IF;
+
+		DECLARE rate DECIMAL ROUND(toToEur / fromToEur, 6);
 
 		SET OutputRoot.Properties = InputRoot.Properties;
 		SET OutputRoot.Properties.MessageDomain = 'JSON';
 		SET OutputRoot.Properties.ReplyProtocol = 'HTTP';
 		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
 		SET OutputRoot.HTTPResponseHeader."Cache-Control" = 'no-store';
+		SET OutputRoot.HTTPResponseHeader."Access-Control-Allow-Origin" = '*';
 		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 200;
 
 		SET OutputRoot.JSON.Data.from = fromCcy;
@@ -32,7 +52,8 @@ CREATE COMPUTE MODULE CurrencyApi_BuildResponse
 		SET OutputRoot.JSON.Data.amount = amountIn;
 		SET OutputRoot.JSON.Data.rate = rate;
 		SET OutputRoot.JSON.Data.convertedAmount = ROUND(amountIn * rate, 4);
-		SET OutputRoot.JSON.Data.baseDate = InputRoot.JSON.Data.date;
+		SET OutputRoot.JSON.Data.baseDate = Environment.CurrencyApi.ratesDate;
+		SET OutputRoot.JSON.Data.cached = Environment.CurrencyApi.cacheHit;
 
 		RETURN TRUE;
 	END;

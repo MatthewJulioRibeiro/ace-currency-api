@@ -1,0 +1,57 @@
+CREATE COMPUTE MODULE CurrencyApi_Cache
+	-- Every request -- regardless of which currencies it names -- ends up
+	-- needing the same resource: the full EUR-based bulk rates table (see
+	-- CurrencyApi_BuildResponse for why: this install's WSRequest node
+	-- can't be pointed at a per-request URL, so there is only ever one
+	-- upstream call to cache). Refreshed every 10 minutes.
+	DECLARE RatesCache SHARED ROW;
+
+	-- Reused as two different steps in each endpoint's flow (same
+	-- module -> same SHARED ROW, which is what makes the cache actually
+	-- shared): called once *before* the upstream fetch to check the
+	-- cache, and again *after* a live fetch to populate it. Which mode
+	-- applies is inferred from whether the inbound message already
+	-- carries a fetched "rates" payload.
+	--
+	-- A cache hit is signalled via the node's failure terminal (THROW)
+	-- rather than a Filter/route node: an ACE Filter node between this
+	-- Compute and the downstream WSRequest was observed to break message
+	-- propagation to it (routing through failure/out terminals instead
+	-- avoids that).
+	--
+	-- Known limitation on this specific containerized "ace-developer"
+	-- install: SHARED variables are documented to persist across
+	-- separate invocations of the same module, but testing here (three
+	-- identical requests in a row, no redeploy in between) showed
+	-- RatesCache never surviving from one HTTP request to the next --
+	-- EXISTS(RatesCache.rates[]) always came back FALSE on the
+	-- following request. The code below is the correct, intended
+	-- pattern (and this ESQL is exactly what you'd write on a normal
+	-- ACE install), but a cache hit should not be expected in this
+	-- specific deployment; every request effectively takes the
+	-- "write" path.
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		IF EXISTS(InputRoot.JSON.Data.rates[]) THEN
+			-- Write mode: runs right after a live upstream fetch.
+			SET RatesCache.date = InputRoot.JSON.Data.date;
+			SET RatesCache.rates = InputRoot.JSON.Data.rates;
+			SET RatesCache.cachedAt = CURRENT_TIMESTAMP;
+
+			SET Environment.CurrencyApi.cacheHit = FALSE;
+			SET Environment.CurrencyApi.rates = RatesCache.rates;
+			SET Environment.CurrencyApi.ratesDate = RatesCache.date;
+			RETURN TRUE;
+		ELSE
+			-- Check mode: runs before any upstream fetch is attempted.
+			IF EXISTS(RatesCache.rates[]) AND CURRENT_TIMESTAMP < RatesCache.cachedAt + INTERVAL '600' SECOND THEN
+				SET Environment.CurrencyApi.cacheHit = TRUE;
+				SET Environment.CurrencyApi.rates = RatesCache.rates;
+				SET Environment.CurrencyApi.ratesDate = RatesCache.date;
+				THROW USER EXCEPTION MESSAGE 9004 VALUES('CACHE_HIT', 'cache hit, skip upstream fetch');
+			END IF;
+			SET Environment.CurrencyApi.cacheHit = FALSE;
+			RETURN TRUE;
+		END IF;
+	END;
+END MODULE;

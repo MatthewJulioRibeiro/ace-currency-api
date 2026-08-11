@@ -2,8 +2,8 @@ CREATE COMPUTE MODULE CurrencyApi_BuildRequest
 	CREATE FUNCTION Main() RETURNS BOOLEAN
 	BEGIN
 		DECLARE queryString CHARACTER COALESCE(InputRoot.HTTPInputHeader."X-Query-String", '');
-		DECLARE fromCcy CHARACTER GetQueryParam(queryString, 'from');
-		DECLARE toCcy CHARACTER GetQueryParam(queryString, 'to');
+		DECLARE fromCcy CHARACTER UPPER(TRIM(GetQueryParam(queryString, 'from')));
+		DECLARE toCcy CHARACTER UPPER(TRIM(GetQueryParam(queryString, 'to')));
 		DECLARE amountStr CHARACTER GetQueryParam(queryString, 'amount');
 
 		IF amountStr = '' THEN
@@ -16,18 +16,9 @@ CREATE COMPUTE MODULE CurrencyApi_BuildRequest
 			THROW USER EXCEPTION MESSAGE 9001 VALUES('MISSING_PARAM', 'from and to are required query params');
 		END IF;
 
-		SET OutputRoot = InputRoot;
-
-		-- carried across nodes via the flow-scoped Environment tree
-		SET Environment.CurrencyApi.fromCcy = UPPER(TRIM(fromCcy));
-		SET Environment.CurrencyApi.toCcy = UPPER(TRIM(toCcy));
+		SET Environment.CurrencyApi.fromCcy = fromCcy;
+		SET Environment.CurrencyApi.toCcy = toCcy;
 		SET Environment.CurrencyApi.amount = amountStr;
-
-		-- overrides the WSRequest node's configured URL for this call
-		SET OutputLocalEnvironment.Destination.HTTP.RequestURL =
-			'https://api.frankfurter.dev/v1/latest?amount=' || amountStr
-			|| '&from=' || UPPER(TRIM(fromCcy))
-			|| '&to=' || UPPER(TRIM(toCcy));
 
 		RETURN TRUE;
 	END;
