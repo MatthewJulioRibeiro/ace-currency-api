@@ -1,0 +1,162 @@
+openapi: 3.0.3
+info:
+  title: Currency API (IBM ACE demo)
+  description: >
+    Portfolio demo built with IBM App Connect Enterprise: fetches the full
+    EUR-based rate table from Frankfurter (free, keyless) once, caches it,
+    and triangulates any from/to pair from that single table
+    (rate(from,to) = eur[to] / eur[from]). Source: see the repository this
+    documentation ships with.
+  version: "1.0.0"
+  license:
+    name: Personal portfolio demo (non-commercial)
+servers:
+  - url: https://ace-demo.matheusribeiro.dev.br
+paths:
+  /api/currency:
+    get:
+      summary: Convert an amount between two currencies
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: ISO 4217 source currency code.
+          schema:
+            type: string
+          example: USD
+        - name: to
+          in: query
+          required: true
+          description: ISO 4217 target currency code.
+          schema:
+            type: string
+          example: BRL
+        - name: amount
+          in: query
+          required: false
+          description: Amount to convert. Defaults to 1.
+          schema:
+            type: number
+          example: 100
+      responses:
+        "200":
+          description: >
+            Conversion result. Also returned (with an `error` field
+            instead) for validation/upstream failures -- this ACE
+            install's WSReply node does not honour a non-200 status code
+            override, so errors are distinguished by body shape, not
+            HTTP status. See ErrorResponse.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ConversionResponse"
+                  - $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                success:
+                  value:
+                    from: USD
+                    to: BRL
+                    amount: 100
+                    rate: 5.104853
+                    convertedAmount: 510.4853
+                    baseDate: "2026-08-11"
+                    cached: false
+                missingParam:
+                  value:
+                    error: MISSING_PARAM
+                    message: "Informe from e to (codigos ISO de moeda) e opcionalmente amount, ex: ?from=USD&to=BRL&amount=100"
+                unknownCurrency:
+                  value:
+                    error: UNKNOWN_CURRENCY
+                    message: "Codigo de moeda desconhecido (from=USD, to=ZZZ)"
+                upstreamUnavailable:
+                  value:
+                    error: UPSTREAM_UNAVAILABLE
+                    message: Servico de cambio temporariamente indisponivel
+  /api/currency/rates:
+    get:
+      summary: Get every exchange rate for a base currency
+      description: >
+        Same underlying (cached) EUR rate table as /api/currency, presented
+        as a full base -> all-currencies table instead of a single pair.
+      parameters:
+        - name: base
+          in: query
+          required: true
+          description: ISO 4217 base currency code.
+          schema:
+            type: string
+          example: USD
+      responses:
+        "200":
+          description: Rate table, or (with an `error` field) a validation failure.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/RatesResponse"
+                  - $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                success:
+                  value:
+                    base: USD
+                    date: "2026-08-11"
+                    cached: false
+                    rates:
+                      AUD: 1.415598
+                      BRL: 5.104853
+                      EUR: 0.866551
+                missingParam:
+                  value:
+                    error: MISSING_PARAM
+                    message: "Informe base (codigo ISO de moeda), ex: ?base=USD"
+components:
+  schemas:
+    ConversionResponse:
+      type: object
+      required: [from, to, amount, rate, convertedAmount, baseDate, cached]
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        amount:
+          type: number
+        rate:
+          type: number
+          description: to-currency units per one from-currency unit.
+        convertedAmount:
+          type: number
+        baseDate:
+          type: string
+          description: Date the underlying EUR rate table was published.
+        cached:
+          type: boolean
+    RatesResponse:
+      type: object
+      required: [base, date, cached, rates]
+      properties:
+        base:
+          type: string
+        date:
+          type: string
+        cached:
+          type: boolean
+        rates:
+          type: object
+          additionalProperties:
+            type: number
+          description: Currency code -> rate relative to `base`.
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          enum:
+            - MISSING_PARAM
+            - UNKNOWN_CURRENCY
+            - UPSTREAM_UNAVAILABLE
+        message:
+          type: string
