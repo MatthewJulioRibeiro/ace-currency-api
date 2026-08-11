@@ -1,0 +1,27 @@
+CREATE COMPUTE MODULE CurrencyApi_BuildRequest
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE fromCcy CHARACTER COALESCE(InputLocalEnvironment.HTTP.Input.QueryString.from, '');
+		DECLARE toCcy CHARACTER COALESCE(InputLocalEnvironment.HTTP.Input.QueryString.to, '');
+		DECLARE amountStr CHARACTER COALESCE(InputLocalEnvironment.HTTP.Input.QueryString.amount, '1');
+
+		IF fromCcy = '' OR toCcy = '' THEN
+			THROW USER EXCEPTION MESSAGE 9001 VALUES('MISSING_PARAM', 'from and to are required query params');
+		END IF;
+
+		SET OutputRoot = InputRoot;
+
+		-- carried across nodes via the flow-scoped Environment tree
+		SET Environment.CurrencyApi.fromCcy = UPPER(TRIM(fromCcy));
+		SET Environment.CurrencyApi.toCcy = UPPER(TRIM(toCcy));
+		SET Environment.CurrencyApi.amount = amountStr;
+
+		-- overrides the HTTPRequest node's configured URL for this call
+		SET OutputLocalEnvironment.Destination.HTTP.RequestURL =
+			'https://api.frankfurter.app/latest?amount=' || amountStr
+			|| '&from=' || UPPER(TRIM(fromCcy))
+			|| '&to=' || UPPER(TRIM(toCcy));
+
+		RETURN TRUE;
+	END;
+END MODULE;

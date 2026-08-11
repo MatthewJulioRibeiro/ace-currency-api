@@ -1,0 +1,23 @@
+CREATE COMPUTE MODULE CurrencyApi_BuildResponse
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE toCcy CHARACTER Environment.CurrencyApi.toCcy;
+		DECLARE fromCcy CHARACTER Environment.CurrencyApi.fromCcy;
+		DECLARE amountIn DECIMAL CAST(Environment.CurrencyApi.amount AS DECIMAL);
+
+		DECLARE ratesRef REFERENCE TO InputRoot.JSON.Data.rates;
+		DECLARE rate DECIMAL CAST(FIELDVALUE(ratesRef.(toCcy)) AS DECIMAL);
+
+		SET OutputRoot.HTTP.Headers."Content-Type" = 'application/json';
+		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 200;
+
+		SET OutputRoot.JSON.Data.from = fromCcy;
+		SET OutputRoot.JSON.Data.to = toCcy;
+		SET OutputRoot.JSON.Data.amount = amountIn;
+		SET OutputRoot.JSON.Data.rate = rate;
+		SET OutputRoot.JSON.Data.convertedAmount = ROUND(amountIn * rate, 4);
+		SET OutputRoot.JSON.Data.baseDate = InputRoot.JSON.Data.date;
+
+		RETURN TRUE;
+	END;
+END MODULE;
