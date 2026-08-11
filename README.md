@@ -1,18 +1,26 @@
 # ace-currency-api
 
-Portfolio demo API built with **IBM App Connect Enterprise (ACE)**, showing an HTTP-exposed flow with ESQL transformation, an outbound HTTP call, and explicit error-path routing. Personal, non-commercial demo — part of [matheusribeiro.dev.br](https://matheusribeiro.dev.br).
+Portfolio demo API built with **IBM App Connect Enterprise (ACE)**, showing an HTTP-exposed flow with ESQL transformation, caching, and explicit error-path routing. Personal, non-commercial demo — part of [matheusribeiro.dev.br](https://matheusribeiro.dev.br).
 
 ## What it does
 
 `GET /api/currency?from=USD&to=BRL&amount=100`
 
-1. **HTTP Input** node receives the request.
-2. **Compute (ESQL)** validates the `from`/`to` query params (routes to an error path via its `failure` terminal if missing) and builds the outbound request URL.
-3. **HTTP Request** node calls [Frankfurter](https://frankfurter.dev) — a free, keyless exchange-rate API.
-4. **Compute (ESQL)** reshapes the response: resolves the requested currency's rate dynamically from the JSON payload and computes the converted amount.
-5. **HTTP Reply** node returns the result. Two dedicated error-formatting Compute nodes handle missing params (400) and upstream failures (502) instead of leaking internals.
+This install's `WSRequest` node (the ACE "web services" HTTP-family; `HTTPRequest` isn't present in this "ace-developer" download) never actually honours a dynamic destination override — confirmed by testing, not assumed: requesting different `from` currencies kept returning the same upstream response regardless of what the ESQL set. So instead of asking Frankfurter for one specific pair per request, the flow always fetches the same EUR-based bulk rate table (one static URL, no override needed), and the from/to conversion is computed by triangulating through EUR: `rate(from, to) = eur[to] / eur[from]`.
 
-No API keys anywhere — Frankfurter is free and keyless.
+1. **HTTP Input** validates `from`/`to`/`amount`.
+2. **Compute (ESQL)** checks a cache of the bulk rate table (a `SHARED` ESQL variable, 10-minute TTL). A cache hit skips the fetch entirely via the node's failure terminal.
+3. **HTTP Request** (cache miss only) fetches the full EUR rate table from [Frankfurter](https://frankfurter.dev) — free, keyless.
+4. **Compute (ESQL)** triangulates the requested pair and builds the response.
+5. **HTTP Reply**. Two dedicated error-formatting Compute nodes handle client errors — missing params, unknown currency codes (400) — and upstream failures (502) instead of leaking internals.
+
+`GET /api/currency/rates?base=USD`
+
+Same cached bulk table, presented as a full base -> all-currencies rate list instead of a single pair.
+
+No API keys anywhere — Frankfurter is free and keyless. CORS is open (`Access-Control-Allow-Origin: *`) so both endpoints can be called straight from a browser — see the live demo widget on [matheusribeiro.dev.br](https://matheusribeiro.dev.br).
+
+Interactive API docs (Swagger UI, self-hosted): [ace-demo.matheusribeiro.dev.br/docs/](https://ace-demo.matheusribeiro.dev.br/docs/) — spec source at [`docs/openapi.yaml`](docs/openapi.yaml).
 
 ```bash
 curl "https://ace-demo.matheusribeiro.dev.br/api/currency?from=USD&to=BRL&amount=100"
@@ -23,9 +31,10 @@ curl "https://ace-demo.matheusribeiro.dev.br/api/currency?from=USD&to=BRL&amount
   "from": "USD",
   "to": "BRL",
   "amount": 100,
-  "rate": 5.4023,
-  "convertedAmount": 540.23,
-  "baseDate": "2026-08-08"
+  "rate": 5.104853,
+  "convertedAmount": 510.4853,
+  "baseDate": "2026-08-11",
+  "cached": false
 }
 ```
 
@@ -33,14 +42,22 @@ curl "https://ace-demo.matheusribeiro.dev.br/api/currency?from=USD&to=BRL&amount
 
 ```
 CurrencyApiApp/
-  CurrencyApi.msgflow                    # the message flow (HTTP Input -> Compute -> HTTP Request -> Compute -> HTTP Reply)
-  CurrencyApi_BuildRequest.esql          # validates params, builds the outbound request URL
-  CurrencyApi_BuildResponse.esql         # dynamic field lookup + currency conversion math
+  CurrencyApi.msgflow                    # the message flow: two HTTP Input paths sharing cache/error nodes
+  CurrencyApi_BuildRequest.esql          # validates from/to/amount
+  CurrencyApi_CheckRatesParam.esql       # validates base (for /rates)
+  CurrencyApi_Cache.esql                 # SHARED-variable cache, reused as both the check and write step
+  CurrencyApi_BuildResponse.esql         # triangulates the requested pair, builds the /currency response
+  CurrencyApi_BuildRatesResponse.esql    # builds the /rates response (hand-built JSON string -- see file comment)
   CurrencyApi_MissingParamError.esql     # 400 error path
   CurrencyApi_UpstreamError.esql         # 502 error path
   application.descriptor, .project       # ACE application project metadata
+docs/                                    # self-hosted OpenAPI spec + vendored Swagger UI
 Dockerfile                                # builds a BAR with ibmint and bundles it with the ACE runtime
 ```
+
+## A note on the cache
+
+`CurrencyApi_Cache.esql` is the correct, intended pattern for this kind of caching (a `SHARED` ESQL variable, reused across two flow steps so it's actually shared). Testing on this specific containerized install showed it not surviving between separate HTTP requests, though — so in practice every request currently takes the "fetch" path. The code is left as-is since it's genuinely how you'd do this on a normal ACE install; see the comment in that file for what was tried.
 
 ## Running it yourself
 
