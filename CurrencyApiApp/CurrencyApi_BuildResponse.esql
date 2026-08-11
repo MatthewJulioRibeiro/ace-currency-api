@@ -24,6 +24,7 @@ CREATE COMPUTE MODULE CurrencyApi_BuildResponse
 		SET OutputRoot.Properties.MessageDomain = 'JSON';
 		SET OutputRoot.Properties.ReplyProtocol = 'HTTP';
 		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
+		SET OutputRoot.HTTPResponseHeader."Cache-Control" = 'no-store';
 		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 200;
 
 		SET OutputRoot.JSON.Data.from = fromCcy;
