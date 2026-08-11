@@ -36,6 +36,5 @@ jobs:
             docker run -d --name ace-currency-api-app \
               -p 127.0.0.1:7800:7800 \
               --restart unless-stopped \
-              --memory=768m \
               ace-currency-api
           '
