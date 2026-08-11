@@ -1,0 +1,41 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.ACE_VM_SSH_KEY }}
+
+      - name: Sync source to VM
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H "${{ secrets.ACE_VM_HOST }}" >> ~/.ssh/known_hosts
+          rsync -az --delete \
+            --exclude 'runtime' --exclude '.git' \
+            ./ "${{ secrets.ACE_VM_USER }}@${{ secrets.ACE_VM_HOST }}:~/ace-currency-api/"
+
+      - name: Build and restart container on VM
+        run: |
+          ssh "${{ secrets.ACE_VM_USER }}@${{ secrets.ACE_VM_HOST }}" '
+            set -e
+            cp ~/ace-runtime/ace-developer.tar.gz ~/ace-currency-api/runtime/ace-developer.tar.gz
+            cd ~/ace-currency-api
+            docker build -t ace-currency-api .
+            docker stop ace-currency-api-app 2>/dev/null || true
+            docker rm ace-currency-api-app 2>/dev/null || true
+            docker run -d --name ace-currency-api-app \
+              -p 127.0.0.1:7800:7800 \
+              --restart unless-stopped \
+              --memory=768m \
+              ace-currency-api
+          '
