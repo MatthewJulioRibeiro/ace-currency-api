@@ -21,11 +21,10 @@ RUN microdnf update -y && microdnf install -y findutils util-linux which tar \
 
 # Install ACE for Developers and accept its license non-interactively.
 COPY --from=builder /opt/ibm/ace /opt/ibm/ace
-RUN /opt/ibm/ace/ace accept license --silently --make-registry-global \
-        --company-name "matheusribeiro.dev.br portfolio demo" \
-    && useradd --uid 1001 --create-home --home-dir /home/aceuser --shell /bin/bash aceuser \
-    && su - aceuser -c "export LICENSE=accept && . /opt/ibm/ace/server/bin/mqsiprofile && mqsicreateworkdir /home/aceuser/ace-server" \
+RUN /opt/ibm/ace/ace make registry global accept license silently \
+    && useradd --uid 1001 --create-home --home-dir /home/aceuser --shell /bin/bash -G mqbrkrs aceuser \
     && chmod -R 777 /home/aceuser /var/mqsi \
+    && su - aceuser -c "export LICENSE=accept && . /opt/ibm/ace/server/bin/mqsiprofile && mqsicreateworkdir /home/aceuser/ace-server" \
     && echo ". /opt/ibm/ace/server/bin/mqsiprofile" >> /home/aceuser/.bashrc
 
 # Package the flow into a BAR and drop it in the work directory's run/ folder,
@@ -33,7 +32,7 @@ RUN /opt/ibm/ace/ace accept license --silently --make-registry-global \
 COPY CurrencyApiApp /tmp/CurrencyApiApp
 RUN mkdir -p /home/aceuser/ace-server/run \
     && chown -R aceuser:aceuser /tmp/CurrencyApiApp /home/aceuser/ace-server/run \
-    && su - aceuser -c ". /opt/ibm/ace/server/bin/mqsiprofile && ibmint package --input-path /tmp/CurrencyApiApp --output-bar-file /home/aceuser/ace-server/run/CurrencyApi.bar"
+    && su - aceuser -c "ibmint package --input-path /tmp/CurrencyApiApp --output-bar-file /home/aceuser/ace-server/run/CurrencyApi.bar"
 
 USER 1001
 EXPOSE 7600 7800 7843

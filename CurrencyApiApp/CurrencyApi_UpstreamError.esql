@@ -1,7 +1,10 @@
 CREATE COMPUTE MODULE CurrencyApi_UpstreamError
 	CREATE FUNCTION Main() RETURNS BOOLEAN
 	BEGIN
-		SET OutputRoot.HTTP.Headers."Content-Type" = 'application/json';
+		SET OutputRoot.Properties = InputRoot.Properties;
+		SET OutputRoot.Properties.MessageDomain = 'JSON';
+		SET OutputRoot.Properties.ReplyProtocol = 'HTTP';
+		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
 		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 502;
 		SET OutputRoot.JSON.Data.error = 'UPSTREAM_UNAVAILABLE';
 		SET OutputRoot.JSON.Data.message = 'Servico de cambio temporariamente indisponivel';

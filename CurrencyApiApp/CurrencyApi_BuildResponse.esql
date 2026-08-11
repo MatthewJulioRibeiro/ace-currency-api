@@ -5,10 +5,25 @@ CREATE COMPUTE MODULE CurrencyApi_BuildResponse
 		DECLARE fromCcy CHARACTER Environment.CurrencyApi.fromCcy;
 		DECLARE amountIn DECIMAL CAST(Environment.CurrencyApi.amount AS DECIMAL);
 
-		DECLARE ratesRef REFERENCE TO InputRoot.JSON.Data.rates;
-		DECLARE rate DECIMAL CAST(FIELDVALUE(ratesRef.(toCcy)) AS DECIMAL);
+		DECLARE rate DECIMAL;
+		DECLARE ratesRef REFERENCE TO InputRoot.JSON.Data.rates.*[1];
+		WHILE LASTMOVE(ratesRef) DO
+			IF FIELDNAME(ratesRef) = toCcy THEN
+				SET rate = CAST(FIELDVALUE(ratesRef) AS DECIMAL);
+			END IF;
+			MOVE ratesRef NEXTSIBLING;
+		END WHILE;
 
-		SET OutputRoot.HTTP.Headers."Content-Type" = 'application/json';
+		IF rate IS NULL THEN
+			SET Environment.CurrencyApi.errorCode = 'UNKNOWN_CURRENCY';
+			SET Environment.CurrencyApi.errorMessage = 'Codigo de moeda de destino desconhecido: ' || toCcy;
+			THROW USER EXCEPTION MESSAGE 9002 VALUES('UNKNOWN_CURRENCY', 'unknown target currency code');
+		END IF;
+
+		SET OutputRoot.Properties = InputRoot.Properties;
+		SET OutputRoot.Properties.MessageDomain = 'JSON';
+		SET OutputRoot.Properties.ReplyProtocol = 'HTTP';
+		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
 		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 200;
 
 		SET OutputRoot.JSON.Data.from = fromCcy;

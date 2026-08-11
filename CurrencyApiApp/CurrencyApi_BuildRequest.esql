@@ -1,11 +1,18 @@
 CREATE COMPUTE MODULE CurrencyApi_BuildRequest
 	CREATE FUNCTION Main() RETURNS BOOLEAN
 	BEGIN
-		DECLARE fromCcy CHARACTER COALESCE(InputLocalEnvironment.HTTP.Input.QueryString.from, '');
-		DECLARE toCcy CHARACTER COALESCE(InputLocalEnvironment.HTTP.Input.QueryString.to, '');
-		DECLARE amountStr CHARACTER COALESCE(InputLocalEnvironment.HTTP.Input.QueryString.amount, '1');
+		DECLARE queryString CHARACTER COALESCE(InputRoot.HTTPInputHeader."X-Query-String", '');
+		DECLARE fromCcy CHARACTER GetQueryParam(queryString, 'from');
+		DECLARE toCcy CHARACTER GetQueryParam(queryString, 'to');
+		DECLARE amountStr CHARACTER GetQueryParam(queryString, 'amount');
+
+		IF amountStr = '' THEN
+			SET amountStr = '1';
+		END IF;
 
 		IF fromCcy = '' OR toCcy = '' THEN
+			SET Environment.CurrencyApi.errorCode = 'MISSING_PARAM';
+			SET Environment.CurrencyApi.errorMessage = 'Informe from e to (codigos ISO de moeda) e opcionalmente amount, ex: ?from=USD&to=BRL&amount=100';
 			THROW USER EXCEPTION MESSAGE 9001 VALUES('MISSING_PARAM', 'from and to are required query params');
 		END IF;
 
@@ -16,12 +23,37 @@ CREATE COMPUTE MODULE CurrencyApi_BuildRequest
 		SET Environment.CurrencyApi.toCcy = UPPER(TRIM(toCcy));
 		SET Environment.CurrencyApi.amount = amountStr;
 
-		-- overrides the HTTPRequest node's configured URL for this call
+		-- overrides the WSRequest node's configured URL for this call
 		SET OutputLocalEnvironment.Destination.HTTP.RequestURL =
-			'https://api.frankfurter.app/latest?amount=' || amountStr
+			'https://api.frankfurter.dev/v1/latest?amount=' || amountStr
 			|| '&from=' || UPPER(TRIM(fromCcy))
 			|| '&to=' || UPPER(TRIM(toCcy));
 
 		RETURN TRUE;
+	END;
+
+	-- Extracts the value of `key` from a raw "a=1&b=2" query string.
+	-- Returns '' when the key is absent. The WSInput node (unlike the
+	-- newer HTTPInput node) does not pre-split the query string into
+	-- individual fields, so this has to be done by hand.
+	CREATE FUNCTION GetQueryParam(IN qs CHARACTER, IN pkey CHARACTER) RETURNS CHARACTER
+	BEGIN
+		DECLARE searchKey CHARACTER pkey || '=';
+		DECLARE startPos INTEGER POSITION(searchKey IN qs);
+		DECLARE valueStart INTEGER;
+		DECLARE remainder CHARACTER;
+		DECLARE ampPos INTEGER;
+		DECLARE result CHARACTER '';
+		IF startPos > 0 THEN
+			SET valueStart = startPos + LENGTH(searchKey);
+			SET remainder = SUBSTRING(qs FROM valueStart);
+			SET ampPos = POSITION('&' IN remainder);
+			IF ampPos = 0 THEN
+				SET result = remainder;
+			ELSE
+				SET result = SUBSTRING(remainder FROM 1 FOR ampPos - 1);
+			END IF;
+		END IF;
+		RETURN result;
 	END;
 END MODULE;
