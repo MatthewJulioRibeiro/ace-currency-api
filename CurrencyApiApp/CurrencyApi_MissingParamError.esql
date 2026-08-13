@@ -1,4 +1,15 @@
 CREATE COMPUTE MODULE CurrencyApi_MissingParamError
+	-- OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode below is the
+	-- textbook-correct way to set this (confirmed against real production
+	-- ESQL in the author's own work codebase, same WSInput/WSReply node
+	-- pair) -- but on this specific containerized "ace-developer" install
+	-- it's never actually honoured: WSReply always replies 200, confirmed
+	-- by testing even the success path with a forced 201 override. Same
+	-- category of limitation as the WSRequest dynamic-destination and
+	-- SHARED-cache issues documented elsewhere in this app. Left set
+	-- anyway (correct intent, costs nothing, and would start working on
+	-- its own if a future ACE patch fixes it) -- clients have to rely on
+	-- the "error" field in the JSON body instead of the HTTP status.
 	CREATE FUNCTION Main() RETURNS BOOLEAN
 	BEGIN
 		DECLARE correlationId CHARACTER COALESCE(Environment.CurrencyApi.correlationId, UUIDASCHAR);
@@ -12,7 +23,6 @@ CREATE COMPUTE MODULE CurrencyApi_MissingParamError
 		SET OutputRoot.HTTPResponseHeader."Access-Control-Expose-Headers" = 'X-Correlation-Id';
 		SET OutputRoot.HTTPResponseHeader."X-Correlation-Id" = correlationId;
 		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 400;
-		SET Environment.CurrencyApi.httpStatus = 400;
 		SET OutputRoot.JSON.Data.error = COALESCE(Environment.CurrencyApi.errorCode, 'MISSING_PARAM');
 		SET OutputRoot.JSON.Data.message = COALESCE(Environment.CurrencyApi.errorMessage,
 			'Informe from e to (codigos ISO de moeda) e opcionalmente amount, ex: ?from=USD&to=BRL&amount=100');
