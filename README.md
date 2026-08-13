@@ -93,12 +93,20 @@ The ACE runtime is a licensed IBM binary that can't be redistributed, so it isn'
 `ace-demo` is a 1 vCPU / 1GB Oracle Cloud "Always Free" VM — too tight to
 reliably run `docker build` itself (microdnf installs, unpacking the
 ~2.4GB ACE runtime, `ibmint package`) without swap-thrashing for 30-40+
-minutes, occasionally past CI's own timeout. `.github/workflows/deploy.yml`
-instead cross-builds the x86_64 image on `mule-demo-arm` (an Ampere A1
-VM with spare capacity — 12GB RAM, its own app uses ~650MB) via
-`docker buildx` + QEMU emulation, capped at 1.2 CPU / 6GB on the builder
-container so it can never starve the live Mule app running alongside it,
-then ships the finished image over to `ace-demo`, which only has to
-`docker load` and restart the container — no build at all on the
-resource-constrained VM. Same CI/CD-on-push pattern as this portfolio's
-other repos otherwise.
+minutes. `.github/workflows/deploy.yml` instead builds the image on the
+GitHub Actions runner itself: it's x86_64 already (a *native* build, no
+emulation needed), free (unlimited Actions minutes on a public repo),
+and has real RAM/CPU to spare. The runner `scp`s the licensed runtime
+down from `ace-demo` at the start of the job (it can't be committed to
+the repo or the image layer cache — see below), builds, ships the
+finished image back to `ace-demo`, which just `docker load`s and
+restarts the container — no build at all on the resource-constrained VM.
+
+(An earlier version of this pipeline cross-built on a second VM via
+QEMU emulation instead, to work around ace-demo's RAM limit without
+paying for anything. It worked, but emulation is slower than a native
+build and the long-lived SSH session for the multi-GB image export
+occasionally dropped mid-transfer. Building on the runner directly
+turned out to be strictly better on every axis once IBM's redistribution
+restriction on the runtime tarball was worked around by fetching it
+fresh each run instead of trying to cache or commit it.)

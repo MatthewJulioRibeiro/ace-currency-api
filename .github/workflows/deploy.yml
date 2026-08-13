@@ -14,47 +14,26 @@ jobs:
       - name: Set up SSH
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: |
-            ${{ secrets.ACE_VM_SSH_KEY }}
-            ${{ secrets.ACE_BUILDER_SSH_KEY }}
+          ssh-private-key: ${{ secrets.ACE_VM_SSH_KEY }}
 
-      - name: Sync source to build VM
+      - name: Fetch the licensed ACE runtime from ace-demo
         run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H "${{ secrets.ACE_BUILDER_HOST }}" >> ~/.ssh/known_hosts
-          rsync -az --delete \
-            --exclude 'runtime' --exclude '.git' \
-            ./ "${{ secrets.ACE_BUILDER_USER }}@${{ secrets.ACE_BUILDER_HOST }}:~/ace-currency-api-build/"
-
-      # ace-demo is a 1 vCPU/1GB Always Free VM -- too tight to reliably run
-      # `docker build` itself (microdnf installs, unpacking the ~2.4GB ACE
-      # runtime, ibmint packaging) without swap-thrashing for 30-40+ minutes.
-      # mule-demo-arm has spare capacity (12GB, its own app uses ~650MB) and
-      # cross-builds the x86_64 image via QEMU emulation (docker buildx +
-      # tonistiigi/binfmt, one-time setup already done on that VM), capped
-      # at 1.2 CPU / 6GB via `docker update` on the buildkit container so it
-      # can never starve the live Mule app running alongside it.
-      - name: Cross-build x86_64 image on the ARM build VM
-        run: |
-          ssh "${{ secrets.ACE_BUILDER_USER }}@${{ secrets.ACE_BUILDER_HOST }}" '
-            set -e
-            cp ~/ace-runtime/ace-developer.tar.gz ~/ace-currency-api-build/runtime/ace-developer.tar.gz
-            cd ~/ace-currency-api-build
-            docker buildx build --builder ace-cross-builder --platform linux/amd64 -t ace-currency-api:latest --load .
-            docker save ace-currency-api:latest | gzip > /tmp/ace-currency-api-image.tar.gz
-          '
-
-      - name: Transfer built image to the ACE VM
-        run: |
+          mkdir -p ~/.ssh runtime
           ssh-keyscan -H "${{ secrets.ACE_VM_HOST }}" >> ~/.ssh/known_hosts
-          ssh "${{ secrets.ACE_BUILDER_USER }}@${{ secrets.ACE_BUILDER_HOST }}" \
-            "cat /tmp/ace-currency-api-image.tar.gz" \
-            | ssh "${{ secrets.ACE_VM_USER }}@${{ secrets.ACE_VM_HOST }}" \
-            "cat > /tmp/ace-currency-api-image.tar.gz"
-          ssh "${{ secrets.ACE_BUILDER_USER }}@${{ secrets.ACE_BUILDER_HOST }}" 'rm -f /tmp/ace-currency-api-image.tar.gz'
+          scp "${{ secrets.ACE_VM_USER }}@${{ secrets.ACE_VM_HOST }}:~/ace-runtime/ace-developer.tar.gz" runtime/ace-developer.tar.gz
 
-      - name: Load image and restart container on ACE VM
+      # GitHub-hosted runners are x86_64 already -- this is a *native* build,
+      # no QEMU emulation needed. ace-demo (1 vCPU/1GB) used to run this
+      # `docker build` itself and reliably swap-thrashed into 30-40+ minute
+      # builds; building here instead is both faster and free (unlimited
+      # Actions minutes on a public repo).
+      - name: Build image
+        run: docker build -t ace-currency-api:latest .
+
+      - name: Ship image to ace-demo and restart
         run: |
+          docker save ace-currency-api:latest | gzip > /tmp/ace-currency-api-image.tar.gz
+          scp /tmp/ace-currency-api-image.tar.gz "${{ secrets.ACE_VM_USER }}@${{ secrets.ACE_VM_HOST }}:/tmp/ace-currency-api-image.tar.gz"
           ssh "${{ secrets.ACE_VM_USER }}@${{ secrets.ACE_VM_HOST }}" '
             set -e
             gunzip -c /tmp/ace-currency-api-image.tar.gz | docker load
