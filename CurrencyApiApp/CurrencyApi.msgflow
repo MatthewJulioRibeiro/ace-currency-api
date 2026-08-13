@@ -13,6 +13,9 @@
       <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_2" location="150,20" computeExpression="esql://routine/#CurrencyApi_BuildRequest.Main">
         <translation xmi:type="utility:ConstantString" string="Validate params"/>
       </nodes>
+      <nodes xmi:type="Log4jLoggingPlugin.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_90" location="150,90" log4jConfigFile="/home/aceuser/ace-server/log4j2-access.xml" logLevel="INFO" logText="$Environment/Variables/Log4j/LogText$" loggerName="CurrencyApiAccessLog">
+        <translation xmi:type="utility:ConstantString" string="Log4j (request)"/>
+      </nodes>
       <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_30" location="290,20" computeExpression="esql://routine/#CurrencyApi_Cache.Main">
         <translation xmi:type="utility:ConstantString" string="Check cache"/>
       </nodes>
@@ -22,91 +25,154 @@
       <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_31" location="430,120" computeExpression="esql://routine/#CurrencyApi_Cache.Main">
         <translation xmi:type="utility:ConstantString" string="Write cache"/>
       </nodes>
-      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_4" location="570,20" computeExpression="esql://routine/#CurrencyApi_BuildResponse.Main">
+      <nodes xmi:type="Log4jLoggingPlugin.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_91" location="570,120" log4jConfigFile="/home/aceuser/ace-server/log4j2-access.xml" logLevel="INFO" logText="$Environment/Variables/Log4j/LogText$" loggerName="CurrencyApiAccessLog">
+        <translation xmi:type="utility:ConstantString" string="Log4j (rates response)"/>
+      </nodes>
+      <!-- Second API for this flow: countries.dev, a static bulk country/
+           currency list. The currency codes already validated against
+           Frankfurter's rates table above (not the request payload) get
+           cross-referenced against this in CurrencyApi_BuildResponse. -->
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_80" location="290,220" computeExpression="esql://routine/#CurrencyApi_CountriesCache.Main">
+        <translation xmi:type="utility:ConstantString" string="Check countries cache"/>
+      </nodes>
+      <nodes xmi:type="ComIbmWSRequest.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_81" location="290,300" URLSpecifier="https://countries.dev/countries" httpMethod="GET" httpVersion="1.1" protocol="TLSv1.2" messageDomainProperty="JSON" timeoutForServer="20">
+        <translation xmi:type="utility:ConstantString" string="Fetch countries (bulk)"/>
+      </nodes>
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_82" location="430,300" computeExpression="esql://routine/#CurrencyApi_CountriesCache.Main">
+        <translation xmi:type="utility:ConstantString" string="Write countries cache"/>
+      </nodes>
+      <nodes xmi:type="Log4jLoggingPlugin.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_92" location="570,220" log4jConfigFile="/home/aceuser/ace-server/log4j2-access.xml" logLevel="INFO" logText="$Environment/Variables/Log4j/LogText$" loggerName="CurrencyApiAccessLog">
+        <translation xmi:type="utility:ConstantString" string="Log4j (countries response)"/>
+      </nodes>
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_4" location="700,20" computeExpression="esql://routine/#CurrencyApi_BuildResponse.Main">
         <translation xmi:type="utility:ConstantString" string="Build response"/>
       </nodes>
 
       <!-- GET /api/currency/rates?base=X -->
-      <nodes xmi:type="ComIbmWSInput.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_20" location="10,300" URLSpecifier="/api/currency/rates" messageDomainProperty="JSON">
+      <nodes xmi:type="ComIbmWSInput.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_20" location="10,400" URLSpecifier="/api/currency/rates" messageDomainProperty="JSON">
         <translation xmi:type="utility:ConstantString" string="HTTP Input (rates)"/>
       </nodes>
-      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_21" location="150,300" computeExpression="esql://routine/#CurrencyApi_CheckRatesParam.Main">
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_21" location="150,400" computeExpression="esql://routine/#CurrencyApi_CheckRatesParam.Main">
         <translation xmi:type="utility:ConstantString" string="Validate params"/>
       </nodes>
-      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_32" location="290,300" computeExpression="esql://routine/#CurrencyApi_Cache.Main">
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_32" location="290,400" computeExpression="esql://routine/#CurrencyApi_Cache.Main">
         <translation xmi:type="utility:ConstantString" string="Check cache"/>
       </nodes>
-      <nodes xmi:type="ComIbmWSRequest.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_23" location="290,400" URLSpecifier="https://api.frankfurter.dev/v1/latest" httpMethod="GET" httpVersion="1.1" protocol="TLSv1.2" messageDomainProperty="JSON" timeoutForServer="20">
+      <nodes xmi:type="ComIbmWSRequest.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_23" location="290,470" URLSpecifier="https://api.frankfurter.dev/v1/latest" httpMethod="GET" httpVersion="1.1" protocol="TLSv1.2" messageDomainProperty="JSON" timeoutForServer="20">
         <translation xmi:type="utility:ConstantString" string="Fetch rates (bulk)"/>
       </nodes>
-      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_33" location="430,400" computeExpression="esql://routine/#CurrencyApi_Cache.Main">
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_33" location="430,470" computeExpression="esql://routine/#CurrencyApi_Cache.Main">
         <translation xmi:type="utility:ConstantString" string="Write cache"/>
       </nodes>
-      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_25" location="570,300" computeExpression="esql://routine/#CurrencyApi_BuildRatesResponse.Main">
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_180" location="570,400" computeExpression="esql://routine/#CurrencyApi_CountriesCache.Main">
+        <translation xmi:type="utility:ConstantString" string="Check countries cache"/>
+      </nodes>
+      <nodes xmi:type="ComIbmWSRequest.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_181" location="570,470" URLSpecifier="https://countries.dev/countries" httpMethod="GET" httpVersion="1.1" protocol="TLSv1.2" messageDomainProperty="JSON" timeoutForServer="20">
+        <translation xmi:type="utility:ConstantString" string="Fetch countries (bulk)"/>
+      </nodes>
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_182" location="700,470" computeExpression="esql://routine/#CurrencyApi_CountriesCache.Main">
+        <translation xmi:type="utility:ConstantString" string="Write countries cache"/>
+      </nodes>
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_25" location="840,400" computeExpression="esql://routine/#CurrencyApi_BuildRatesResponse.Main">
         <translation xmi:type="utility:ConstantString" string="Build rates response"/>
       </nodes>
 
       <!-- GET /api/currency/convert-many?pairs=USD-BRL,EUR-JPY&amount=100 -->
-      <nodes xmi:type="ComIbmWSInput.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_60" location="10,600" URLSpecifier="/api/currency/convert-many" messageDomainProperty="JSON">
+      <nodes xmi:type="ComIbmWSInput.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_60" location="10,700" URLSpecifier="/api/currency/convert-many" messageDomainProperty="JSON">
         <translation xmi:type="utility:ConstantString" string="HTTP Input (convert-many)"/>
       </nodes>
-      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_61" location="150,600" computeExpression="esql://routine/#CurrencyApi_CheckPairsParam.Main">
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_61" location="150,700" computeExpression="esql://routine/#CurrencyApi_CheckPairsParam.Main">
         <translation xmi:type="utility:ConstantString" string="Validate params"/>
       </nodes>
-      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_62" location="290,600" computeExpression="esql://routine/#CurrencyApi_Cache.Main">
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_62" location="290,700" computeExpression="esql://routine/#CurrencyApi_Cache.Main">
         <translation xmi:type="utility:ConstantString" string="Check cache"/>
       </nodes>
-      <nodes xmi:type="ComIbmWSRequest.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_63" location="290,700" URLSpecifier="https://api.frankfurter.dev/v1/latest" httpMethod="GET" httpVersion="1.1" protocol="TLSv1.2" messageDomainProperty="JSON" timeoutForServer="20">
+      <nodes xmi:type="ComIbmWSRequest.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_63" location="290,770" URLSpecifier="https://api.frankfurter.dev/v1/latest" httpMethod="GET" httpVersion="1.1" protocol="TLSv1.2" messageDomainProperty="JSON" timeoutForServer="20">
         <translation xmi:type="utility:ConstantString" string="Fetch rates (bulk)"/>
       </nodes>
-      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_64" location="430,700" computeExpression="esql://routine/#CurrencyApi_Cache.Main">
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_64" location="430,770" computeExpression="esql://routine/#CurrencyApi_Cache.Main">
         <translation xmi:type="utility:ConstantString" string="Write cache"/>
       </nodes>
-      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_65" location="570,600" computeExpression="esql://routine/#CurrencyApi_BuildManyResponse.Main">
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_280" location="570,700" computeExpression="esql://routine/#CurrencyApi_CountriesCache.Main">
+        <translation xmi:type="utility:ConstantString" string="Check countries cache"/>
+      </nodes>
+      <nodes xmi:type="ComIbmWSRequest.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_281" location="570,770" URLSpecifier="https://countries.dev/countries" httpMethod="GET" httpVersion="1.1" protocol="TLSv1.2" messageDomainProperty="JSON" timeoutForServer="20">
+        <translation xmi:type="utility:ConstantString" string="Fetch countries (bulk)"/>
+      </nodes>
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_282" location="700,770" computeExpression="esql://routine/#CurrencyApi_CountriesCache.Main">
+        <translation xmi:type="utility:ConstantString" string="Write countries cache"/>
+      </nodes>
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_65" location="840,700" computeExpression="esql://routine/#CurrencyApi_BuildManyResponse.Main">
         <translation xmi:type="utility:ConstantString" string="Build convert-many response"/>
       </nodes>
 
-      <!-- access-log nodes: one per endpoint, wired between "Build ...
+      <!-- final access-log nodes: one per endpoint, wired between "Build ...
            Response" and the shared HTTP Reply. Each Build-Response ESQL
            module already sets Environment.Variables.Log4j.LogText with
            the structured JSON line this node writes; see log4j2-access.xml
            for where it ends up. Verified against this exact ACE image/
            version before wiring in: the "IAM3" Log4jLoggingNode SupportPac
            (github.com/ot4i/node-for-log4j), installed via the Dockerfile's
-           lilPath setup, not something bundled with ACE itself. -->
-      <nodes xmi:type="Log4jLoggingPlugin.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_70" location="700,20" log4jConfigFile="/home/aceuser/ace-server/log4j2-access.xml" logLevel="INFO" logText="$Environment/Variables/Log4j/LogText$" loggerName="CurrencyApiAccessLog">
+           lilPath setup, not something bundled with ACE itself. Also
+           reused as the error-path logger; see the error wiring below. -->
+      <nodes xmi:type="Log4jLoggingPlugin.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_70" location="990,20" log4jConfigFile="/home/aceuser/ace-server/log4j2-access.xml" logLevel="INFO" logText="$Environment/Variables/Log4j/LogText$" loggerName="CurrencyApiAccessLog">
         <translation xmi:type="utility:ConstantString" string="Log4j"/>
       </nodes>
-      <nodes xmi:type="Log4jLoggingPlugin.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_71" location="700,300" log4jConfigFile="/home/aceuser/ace-server/log4j2-access.xml" logLevel="INFO" logText="$Environment/Variables/Log4j/LogText$" loggerName="CurrencyApiAccessLog">
+      <nodes xmi:type="Log4jLoggingPlugin.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_71" location="990,400" log4jConfigFile="/home/aceuser/ace-server/log4j2-access.xml" logLevel="INFO" logText="$Environment/Variables/Log4j/LogText$" loggerName="CurrencyApiAccessLog">
         <translation xmi:type="utility:ConstantString" string="Log4j"/>
       </nodes>
-      <nodes xmi:type="Log4jLoggingPlugin.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_72" location="700,600" log4jConfigFile="/home/aceuser/ace-server/log4j2-access.xml" logLevel="INFO" logText="$Environment/Variables/Log4j/LogText$" loggerName="CurrencyApiAccessLog">
+      <nodes xmi:type="Log4jLoggingPlugin.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_72" location="990,700" log4jConfigFile="/home/aceuser/ace-server/log4j2-access.xml" logLevel="INFO" logText="$Environment/Variables/Log4j/LogText$" loggerName="CurrencyApiAccessLog">
         <translation xmi:type="utility:ConstantString" string="Log4j"/>
       </nodes>
 
       <!-- shared error handling + reply -->
-      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_5" location="150,500" computeExpression="esql://routine/#CurrencyApi_MissingParamError.Main">
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_5" location="150,900" computeExpression="esql://routine/#CurrencyApi_MissingParamError.Main">
         <translation xmi:type="utility:ConstantString" string="Client error (400)"/>
       </nodes>
-      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_7" location="430,500" computeExpression="esql://routine/#CurrencyApi_UpstreamError.Main">
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_7" location="430,900" computeExpression="esql://routine/#CurrencyApi_UpstreamError.Main">
         <translation xmi:type="utility:ConstantString" string="Upstream error (502)"/>
       </nodes>
-      <nodes xmi:type="ComIbmWSReply.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_6" location="990,300">
+      <!-- Logging the error path turned out not to be safe as a serial
+           hop before the reply: routing through Log4jLoggingPlugin (even
+           with the CurrencyApi_RestoreStatus stash-and-restore workaround
+           tried first) made 400/502 come back as 200; confirmed by
+           testing, root cause not fully pinned down. Fixed by fanning
+           the error node's "out" terminal to two independent targets
+           instead: HTTP Reply gets the message directly, completely
+           unaffected by whatever the logging branch does to its own copy. -->
+      <nodes xmi:type="Log4jLoggingPlugin.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_73" location="700,970" log4jConfigFile="/home/aceuser/ace-server/log4j2-access.xml" logLevel="INFO" logText="$Environment/Variables/Log4j/LogText$" loggerName="CurrencyApiAccessLog">
+        <translation xmi:type="utility:ConstantString" string="Log4j (error)"/>
+      </nodes>
+      <nodes xmi:type="ComIbmWSReply.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_6" location="990,900">
         <translation xmi:type="utility:ConstantString" string="HTTP Reply"/>
       </nodes>
 
-      <!-- main lookup wiring -->
+      <!-- main endpoint wiring -->
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_1" targetNode="FCMComposite_1_2" sourceNode="FCMComposite_1_1" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
-      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_2" targetNode="FCMComposite_1_30" sourceNode="FCMComposite_1_2" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_2" targetNode="FCMComposite_1_90" sourceNode="FCMComposite_1_2" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.Input"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_3" targetNode="FCMComposite_1_5" sourceNode="FCMComposite_1_2" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_90" targetNode="FCMComposite_1_30" sourceNode="FCMComposite_1_90" sourceTerminalName="OutTerminal.Output" targetTerminalName="InTerminal.in"/>
       <!-- cache miss: Check-cache's plain "out" continues straight to the fetch -->
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_60" targetNode="FCMComposite_1_3" sourceNode="FCMComposite_1_30" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
       <!-- cache hit: Check-cache throws, routing here instead (skips the fetch entirely) -->
-      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_20" targetNode="FCMComposite_1_4" sourceNode="FCMComposite_1_30" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_20" targetNode="FCMComposite_1_91" sourceNode="FCMComposite_1_30" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.Input"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_5" targetNode="FCMComposite_1_7" sourceNode="FCMComposite_1_3" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_6" targetNode="FCMComposite_1_7" sourceNode="FCMComposite_1_3" sourceTerminalName="OutTerminal.error" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_24" targetNode="FCMComposite_1_31" sourceNode="FCMComposite_1_3" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
-      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_25" targetNode="FCMComposite_1_4" sourceNode="FCMComposite_1_31" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_25" targetNode="FCMComposite_1_91" sourceNode="FCMComposite_1_31" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.Input"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_91" targetNode="FCMComposite_1_80" sourceNode="FCMComposite_1_91" sourceTerminalName="OutTerminal.Output" targetTerminalName="InTerminal.in"/>
+      <!-- countries: cache miss continues to the fetch, cache hit (failure terminal) skips it -->
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_80" targetNode="FCMComposite_1_81" sourceNode="FCMComposite_1_80" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_81" targetNode="FCMComposite_1_92" sourceNode="FCMComposite_1_80" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.Input"/>
+      <!-- countries fetch success -> stash in cache; failure/error -> same module's
+           check-mode as a graceful-degradation fallback (skip enrichment, don't
+           fail the request) -->
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_82" targetNode="FCMComposite_1_82" sourceNode="FCMComposite_1_81" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_83" targetNode="FCMComposite_1_82" sourceNode="FCMComposite_1_81" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_84" targetNode="FCMComposite_1_82" sourceNode="FCMComposite_1_81" sourceTerminalName="OutTerminal.error" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_85" targetNode="FCMComposite_1_92" sourceNode="FCMComposite_1_82" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.Input"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_86" targetNode="FCMComposite_1_92" sourceNode="FCMComposite_1_82" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.Input"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_92" targetNode="FCMComposite_1_4" sourceNode="FCMComposite_1_92" sourceTerminalName="OutTerminal.Output" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_7" targetNode="FCMComposite_1_70" sourceNode="FCMComposite_1_4" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.Input"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_110" targetNode="FCMComposite_1_6" sourceNode="FCMComposite_1_70" sourceTerminalName="OutTerminal.Output" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_10" targetNode="FCMComposite_1_5" sourceNode="FCMComposite_1_4" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
@@ -116,11 +182,18 @@
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_41" targetNode="FCMComposite_1_32" sourceNode="FCMComposite_1_21" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_42" targetNode="FCMComposite_1_5" sourceNode="FCMComposite_1_21" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_61" targetNode="FCMComposite_1_23" sourceNode="FCMComposite_1_32" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
-      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_43" targetNode="FCMComposite_1_25" sourceNode="FCMComposite_1_32" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_43" targetNode="FCMComposite_1_180" sourceNode="FCMComposite_1_32" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_47" targetNode="FCMComposite_1_7" sourceNode="FCMComposite_1_23" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_48" targetNode="FCMComposite_1_7" sourceNode="FCMComposite_1_23" sourceTerminalName="OutTerminal.error" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_49" targetNode="FCMComposite_1_33" sourceNode="FCMComposite_1_23" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
-      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_50" targetNode="FCMComposite_1_25" sourceNode="FCMComposite_1_33" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_50" targetNode="FCMComposite_1_180" sourceNode="FCMComposite_1_33" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_180" targetNode="FCMComposite_1_181" sourceNode="FCMComposite_1_180" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_181" targetNode="FCMComposite_1_25" sourceNode="FCMComposite_1_180" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_182" targetNode="FCMComposite_1_182" sourceNode="FCMComposite_1_181" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_183" targetNode="FCMComposite_1_182" sourceNode="FCMComposite_1_181" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_184" targetNode="FCMComposite_1_182" sourceNode="FCMComposite_1_181" sourceTerminalName="OutTerminal.error" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_185" targetNode="FCMComposite_1_25" sourceNode="FCMComposite_1_182" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_186" targetNode="FCMComposite_1_25" sourceNode="FCMComposite_1_182" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_51" targetNode="FCMComposite_1_71" sourceNode="FCMComposite_1_25" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.Input"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_111" targetNode="FCMComposite_1_6" sourceNode="FCMComposite_1_71" sourceTerminalName="OutTerminal.Output" targetTerminalName="InTerminal.in"/>
 
@@ -129,17 +202,31 @@
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_101" targetNode="FCMComposite_1_62" sourceNode="FCMComposite_1_61" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_102" targetNode="FCMComposite_1_5" sourceNode="FCMComposite_1_61" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_103" targetNode="FCMComposite_1_63" sourceNode="FCMComposite_1_62" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
-      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_104" targetNode="FCMComposite_1_65" sourceNode="FCMComposite_1_62" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_104" targetNode="FCMComposite_1_280" sourceNode="FCMComposite_1_62" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_105" targetNode="FCMComposite_1_7" sourceNode="FCMComposite_1_63" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_106" targetNode="FCMComposite_1_7" sourceNode="FCMComposite_1_63" sourceTerminalName="OutTerminal.error" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_107" targetNode="FCMComposite_1_64" sourceNode="FCMComposite_1_63" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
-      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_108" targetNode="FCMComposite_1_65" sourceNode="FCMComposite_1_64" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_108" targetNode="FCMComposite_1_280" sourceNode="FCMComposite_1_64" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_280" targetNode="FCMComposite_1_281" sourceNode="FCMComposite_1_280" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_281" targetNode="FCMComposite_1_65" sourceNode="FCMComposite_1_280" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_282" targetNode="FCMComposite_1_282" sourceNode="FCMComposite_1_281" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_283" targetNode="FCMComposite_1_282" sourceNode="FCMComposite_1_281" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_284" targetNode="FCMComposite_1_282" sourceNode="FCMComposite_1_281" sourceTerminalName="OutTerminal.error" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_285" targetNode="FCMComposite_1_65" sourceNode="FCMComposite_1_282" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_286" targetNode="FCMComposite_1_65" sourceNode="FCMComposite_1_282" sourceTerminalName="OutTerminal.failure" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_109" targetNode="FCMComposite_1_72" sourceNode="FCMComposite_1_65" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.Input"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_112" targetNode="FCMComposite_1_6" sourceNode="FCMComposite_1_72" sourceTerminalName="OutTerminal.Output" targetTerminalName="InTerminal.in"/>
 
-      <!-- shared error replies -->
+      <!-- shared error replies: each error node's "out" terminal fans out
+           to two independent targets: HTTP Reply gets its own copy of
+           the message directly (status code guaranteed correct, same as
+           the original design), and a second copy goes to Log4j so client
+           errors (400) and upstream failures (502) are still traceable by
+           correlationId, same as successful requests. -->
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_8" targetNode="FCMComposite_1_6" sourceNode="FCMComposite_1_5" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_8b" targetNode="FCMComposite_1_73" sourceNode="FCMComposite_1_5" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.Input"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_9" targetNode="FCMComposite_1_6" sourceNode="FCMComposite_1_7" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_9b" targetNode="FCMComposite_1_73" sourceNode="FCMComposite_1_7" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.Input"/>
     </composition>
     <propertyOrganizer/>
     <stickyBoard/>

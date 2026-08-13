@@ -66,6 +66,10 @@ Dockerfile                                # builds a BAR with ibmint and bundles
 
 `CurrencyApi_Cache.esql` is the correct, intended pattern for this kind of caching (a `SHARED` ESQL variable, reused across two flow steps so it's actually shared). Testing on this specific containerized install showed it not surviving between separate HTTP requests, though — so in practice every request currently takes the "fetch" path. The code is left as-is since it's genuinely how you'd do this on a normal ACE install; see the comment in that file for what was tried.
 
+## A note on error status codes
+
+`CurrencyApi_MissingParamError`/`CurrencyApi_UpstreamError` set `OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode` to 400/502 the textbook-correct way — confirmed against real, live production ESQL using the same `WSInput`/`WSReply` node pair. On this specific containerized install, though, `WSReply` never actually honours it: it always replies `200`, confirmed by testing even the success path with a forced non-default status code. Same category of limitation as the `WSRequest`/`SHARED`-cache findings above. The status-setting code is left in (correct intent, and it'd start working on its own if a future ACE patch fixes this) — for now, clients need to check the `"error"` field in the JSON body rather than the HTTP status to detect a failed request.
+
 ## Observability
 
 Every successful request writes a structured JSON line (timestamp, endpoint, request params, cache status) via ACE's [Log4j node](https://github.com/ot4i/node-for-log4j) — the "IAM3" `Log4jLoggingNode` SupportPac, IBM's documented way to get real Log4j2 logging out of an ESQL-only flow (there's no Java compute node here to reach Log4j from directly). Rotated and gzip-compressed on rollover via `log4j2-access.xml`.

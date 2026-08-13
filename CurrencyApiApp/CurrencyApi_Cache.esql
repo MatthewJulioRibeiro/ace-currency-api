@@ -32,6 +32,9 @@ CREATE COMPUTE MODULE CurrencyApi_Cache
 	-- "write" path.
 	CREATE FUNCTION Main() RETURNS BOOLEAN
 	BEGIN
+		DECLARE logPrefix CHARACTER '{"ts":"' || CAST(CURRENT_TIMESTAMP AS CHARACTER FORMAT 'yyyy-MM-dd''T''HH:mm:ss.SSS''Z''')
+			|| '","correlationId":"' || COALESCE(Environment.CurrencyApi.correlationId, '') || '","step":"frankfurter-rates"';
+
 		IF EXISTS(InputRoot.JSON.Data.rates[]) THEN
 			-- Write mode: runs right after a live upstream fetch.
 			SET RatesCache.date = InputRoot.JSON.Data.date;
@@ -41,6 +44,8 @@ CREATE COMPUTE MODULE CurrencyApi_Cache
 			SET Environment.CurrencyApi.cacheHit = FALSE;
 			SET Environment.CurrencyApi.rates = RatesCache.rates;
 			SET Environment.CurrencyApi.ratesDate = RatesCache.date;
+			SET Environment.Variables.Log4j.LogText = logPrefix || ',"source":"fetch","response":'
+				|| CAST(ASBITSTREAM(InputRoot.JSON.Data) AS CHARACTER CCSID 1208) || '}';
 			RETURN TRUE;
 		ELSE
 			-- Check mode: runs before any upstream fetch is attempted.
@@ -48,6 +53,7 @@ CREATE COMPUTE MODULE CurrencyApi_Cache
 				SET Environment.CurrencyApi.cacheHit = TRUE;
 				SET Environment.CurrencyApi.rates = RatesCache.rates;
 				SET Environment.CurrencyApi.ratesDate = RatesCache.date;
+				SET Environment.Variables.Log4j.LogText = logPrefix || ',"source":"cache"}';
 				THROW USER EXCEPTION MESSAGE 9004 VALUES('CACHE_HIT', 'cache hit, skip upstream fetch');
 			END IF;
 			SET Environment.CurrencyApi.cacheHit = FALSE;

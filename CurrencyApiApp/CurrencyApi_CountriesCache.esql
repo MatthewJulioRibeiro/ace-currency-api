@@ -1,0 +1,47 @@
+CREATE COMPUTE MODULE CurrencyApi_CountriesCache
+	-- Second API call required by the "at least 2 APIs per flow, and one
+	-- of them has to use data that came back from the first API, not the
+	-- request payload" design: countries.dev returns a static bulk list
+	-- of every country and its currencies. The currency codes already
+	-- validated against Frankfurter's rates table (see
+	-- CurrencyApi_BuildResponse / CurrencyApi_BuildRatesResponse /
+	-- CurrencyApi_BuildManyResponse) are cross-referenced against this
+	-- data to attach country/currency names -- using data that came back
+	-- from the first API call, not anything the client sent.
+	--
+	-- Country/currency names are static reference data, so this is
+	-- cached far more aggressively (24h) than the exchange-rate table.
+	-- Same SHARED-variable caveat as CurrencyApi_Cache applies here --
+	-- see that file's comment -- so in practice this fetches on every
+	-- request. This module doubles as the graceful-degradation fallback
+	-- when the live fetch itself fails: CurrencyApi.msgflow wires the
+	-- WSRequest node's failure/error terminals back into this same
+	-- module's check-mode branch, so a countries.dev outage just skips
+	-- enrichment instead of failing the whole currency conversion.
+	DECLARE CountriesCache SHARED ROW;
+
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE logPrefix CHARACTER '{"ts":"' || CAST(CURRENT_TIMESTAMP AS CHARACTER FORMAT 'yyyy-MM-dd''T''HH:mm:ss.SSS''Z''')
+			|| '","correlationId":"' || COALESCE(Environment.CurrencyApi.correlationId, '') || '","step":"countries-lookup"';
+
+		IF EXISTS(InputRoot.JSON.Data.Item[]) THEN
+			-- Write mode: runs right after a live upstream fetch.
+			SET CountriesCache.countries = InputRoot.JSON.Data;
+			SET CountriesCache.cachedAt = CURRENT_TIMESTAMP;
+			SET Environment.CurrencyApi.countries = CountriesCache.countries;
+			SET Environment.Variables.Log4j.LogText = logPrefix || ',"source":"fetch","countryCount":' || CAST(CARDINALITY(InputRoot.JSON.Data.*[]) AS CHARACTER) || '}';
+			RETURN TRUE;
+		ELSE
+			-- Check mode: runs before the fetch is attempted, and also as
+			-- the fallback when the fetch itself just failed.
+			IF EXISTS(CountriesCache.countries.Item[]) AND CURRENT_TIMESTAMP < CountriesCache.cachedAt + INTERVAL '86400' SECOND THEN
+				SET Environment.CurrencyApi.countries = CountriesCache.countries;
+				SET Environment.Variables.Log4j.LogText = logPrefix || ',"source":"cache"}';
+				THROW USER EXCEPTION MESSAGE 9006 VALUES('COUNTRIES_CACHE_HIT', 'countries cache hit, skip upstream fetch');
+			END IF;
+			SET Environment.Variables.Log4j.LogText = logPrefix || ',"source":"unavailable"}';
+			RETURN TRUE;
+		END IF;
+	END;
+END MODULE;

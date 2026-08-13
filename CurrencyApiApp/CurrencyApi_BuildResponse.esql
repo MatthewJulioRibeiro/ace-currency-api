@@ -38,6 +38,38 @@ CREATE COMPUTE MODULE CurrencyApi_BuildResponse
 		END IF;
 
 		DECLARE rate DECIMAL ROUND(toToEur / fromToEur, 6);
+		DECLARE correlationId CHARACTER Environment.CurrencyApi.correlationId;
+
+		-- Second-API enrichment: cross-reference the currency codes just
+		-- validated against Frankfurter's own rates table (not the request
+		-- payload) against countries.dev's bulk country/currency list to
+		-- attach country and currency display names. Absent entirely if
+		-- that fetch failed or found no match -- enrichment is a bonus,
+		-- not a reason to fail the conversion.
+		DECLARE fromCountryName CHARACTER '';
+		DECLARE toCountryName CHARACTER '';
+		DECLARE fromCurrencyName CHARACTER '';
+		DECLARE toCurrencyName CHARACTER '';
+		IF EXISTS(Environment.CurrencyApi.countries.Item[]) THEN
+			DECLARE cref REFERENCE TO Environment.CurrencyApi.countries.Item[1];
+			WHILE LASTMOVE(cref) DO
+				IF EXISTS(cref.currencies.Item[]) THEN
+					DECLARE curRef REFERENCE TO cref.currencies.Item[1];
+					WHILE LASTMOVE(curRef) DO
+						IF curRef.code = fromCcy AND fromCountryName = '' THEN
+							SET fromCountryName = cref.name;
+							SET fromCurrencyName = curRef.name;
+						END IF;
+						IF curRef.code = toCcy AND toCountryName = '' THEN
+							SET toCountryName = cref.name;
+							SET toCurrencyName = curRef.name;
+						END IF;
+						MOVE curRef NEXTSIBLING;
+					END WHILE;
+				END IF;
+				MOVE cref NEXTSIBLING;
+			END WHILE;
+		END IF;
 
 		SET OutputRoot.Properties = InputRoot.Properties;
 		SET OutputRoot.Properties.MessageDomain = 'JSON';
@@ -45,6 +77,8 @@ CREATE COMPUTE MODULE CurrencyApi_BuildResponse
 		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
 		SET OutputRoot.HTTPResponseHeader."Cache-Control" = 'no-store';
 		SET OutputRoot.HTTPResponseHeader."Access-Control-Allow-Origin" = '*';
+		SET OutputRoot.HTTPResponseHeader."Access-Control-Expose-Headers" = 'X-Correlation-Id';
+		SET OutputRoot.HTTPResponseHeader."X-Correlation-Id" = correlationId;
 		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 200;
 
 		SET OutputRoot.JSON.Data.from = fromCcy;
@@ -54,10 +88,20 @@ CREATE COMPUTE MODULE CurrencyApi_BuildResponse
 		SET OutputRoot.JSON.Data.convertedAmount = ROUND(amountIn * rate, 4);
 		SET OutputRoot.JSON.Data.baseDate = Environment.CurrencyApi.ratesDate;
 		SET OutputRoot.JSON.Data.cached = Environment.CurrencyApi.cacheHit;
+		IF fromCountryName <> '' THEN
+			SET OutputRoot.JSON.Data.fromCountry = fromCountryName;
+			SET OutputRoot.JSON.Data.fromCurrencyName = fromCurrencyName;
+		END IF;
+		IF toCountryName <> '' THEN
+			SET OutputRoot.JSON.Data.toCountry = toCountryName;
+			SET OutputRoot.JSON.Data.toCurrencyName = toCurrencyName;
+		END IF;
 
 		SET Environment.Variables.Log4j.LogText = '{"ts":"' || CAST(CURRENT_TIMESTAMP AS CHARACTER FORMAT 'yyyy-MM-dd''T''HH:mm:ss.SSS''Z''')
-			|| '","endpoint":"/api/currency","from":"' || fromCcy || '","to":"' || toCcy
-			|| '","status":200,"cached":' || LOWER(CAST(Environment.CurrencyApi.cacheHit AS CHARACTER)) || '}';
+			|| '","correlationId":"' || correlationId
+			|| '","step":"access","endpoint":"/api/currency","from":"' || fromCcy || '","to":"' || toCcy
+			|| '","status":200,"cached":' || LOWER(CAST(Environment.CurrencyApi.cacheHit AS CHARACTER))
+			|| ',"transaction":' || CAST(ASBITSTREAM(OutputRoot.JSON.Data) AS CHARACTER CCSID 1208) || '}';
 
 		RETURN TRUE;
 	END;

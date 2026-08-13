@@ -1,6 +1,9 @@
 CREATE COMPUTE MODULE CurrencyApi_CheckPairsParam
 	CREATE FUNCTION Main() RETURNS BOOLEAN
 	BEGIN
+		SET Environment.CurrencyApi.correlationId = UUIDASCHAR;
+		SET Environment.CurrencyApi.endpoint = '/api/currency/convert-many';
+
 		DECLARE queryString CHARACTER COALESCE(InputRoot.HTTPInputHeader."X-Query-String", '');
 		DECLARE pairsStr CHARACTER TRIM(GetQueryParam(queryString, 'pairs'));
 		DECLARE amountStr CHARACTER GetQueryParam(queryString, 'amount');
