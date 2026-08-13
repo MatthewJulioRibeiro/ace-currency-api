@@ -5,23 +5,24 @@ CREATE COMPUTE MODULE CurrencyApi_BuildManyResponse
 	-- An invalid or unknown pair reports its own ok/error inline in
 	-- "results" -- same pattern as the Mule weather API's /compare
 	-- endpoint -- instead of failing the whole batch.
+	--
+	-- The "results" array is built as a plain JSON string, not via the
+	-- tree API's [index] assignment: a first attempt using
+	-- OutputRoot.JSON.Data.results[idx].field = value deployed and ran
+	-- without error, but serialized as three separate top-level "results"
+	-- keys instead of one array with three elements -- the same class of
+	-- serialization quirk already documented in
+	-- CurrencyApi_BuildRatesResponse.esql for dynamic field names, just
+	-- showing up for integer array indices here instead. Confirmed live
+	-- before settling on this string-building approach.
 	CREATE FUNCTION Main() RETURNS BOOLEAN
 	BEGIN
 		DECLARE amountIn DECIMAL CAST(Environment.CurrencyApi.amount AS DECIMAL);
 		DECLARE remaining CHARACTER Environment.CurrencyApi.pairsRaw;
-		DECLARE idx INTEGER 0;
 		DECLARE commaPos INTEGER;
 		DECLARE token CHARACTER;
-
-		SET OutputRoot.Properties = InputRoot.Properties;
-		SET OutputRoot.Properties.MessageDomain = 'JSON';
-		SET OutputRoot.Properties.ReplyProtocol = 'HTTP';
-		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
-		SET OutputRoot.HTTPResponseHeader."Cache-Control" = 'no-store';
-		SET OutputRoot.HTTPResponseHeader."Access-Control-Allow-Origin" = '*';
-		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 200;
-		SET OutputRoot.JSON.Data.cached = Environment.CurrencyApi.cacheHit;
-		SET OutputRoot.JSON.Data.baseDate = Environment.CurrencyApi.ratesDate;
+		DECLARE resultsJson CHARACTER '';
+		DECLARE isFirst BOOLEAN TRUE;
 
 		WHILE LENGTH(TRIM(remaining)) > 0 DO
 			SET commaPos = POSITION(',' IN remaining);
@@ -34,8 +35,6 @@ CREATE COMPUTE MODULE CurrencyApi_BuildManyResponse
 			END IF;
 
 			IF LENGTH(token) > 0 THEN
-				SET idx = idx + 1;
-
 				DECLARE dashPos INTEGER POSITION('-' IN token);
 				DECLARE fromCcy CHARACTER '';
 				DECLARE toCcy CHARACTER '';
@@ -44,10 +43,10 @@ CREATE COMPUTE MODULE CurrencyApi_BuildManyResponse
 					SET toCcy = UPPER(TRIM(SUBSTRING(token FROM dashPos + 1)));
 				END IF;
 
+				DECLARE itemJson CHARACTER '';
+
 				IF fromCcy = '' OR toCcy = '' THEN
-					SET OutputRoot.JSON.Data.results[idx].pair = token;
-					SET OutputRoot.JSON.Data.results[idx].ok = FALSE;
-					SET OutputRoot.JSON.Data.results[idx].error = 'INVALID_PAIR';
+					SET itemJson = '{"pair":"' || token || '","ok":false,"error":"INVALID_PAIR"}';
 				ELSE
 					DECLARE fromToEur DECIMAL 1;
 					DECLARE toToEur DECIMAL 1;
@@ -68,22 +67,42 @@ CREATE COMPUTE MODULE CurrencyApi_BuildManyResponse
 					END WHILE;
 
 					IF NOT foundFrom OR NOT foundTo THEN
-						SET OutputRoot.JSON.Data.results[idx].pair = fromCcy || '-' || toCcy;
-						SET OutputRoot.JSON.Data.results[idx].ok = FALSE;
-						SET OutputRoot.JSON.Data.results[idx].error = 'UNKNOWN_CURRENCY';
+						SET itemJson = '{"pair":"' || fromCcy || '-' || toCcy || '","ok":false,"error":"UNKNOWN_CURRENCY"}';
 					ELSE
 						DECLARE rate DECIMAL ROUND(toToEur / fromToEur, 6);
-						SET OutputRoot.JSON.Data.results[idx].pair = fromCcy || '-' || toCcy;
-						SET OutputRoot.JSON.Data.results[idx].ok = TRUE;
-						SET OutputRoot.JSON.Data.results[idx].from = fromCcy;
-						SET OutputRoot.JSON.Data.results[idx].to = toCcy;
-						SET OutputRoot.JSON.Data.results[idx].amount = amountIn;
-						SET OutputRoot.JSON.Data.results[idx].rate = rate;
-						SET OutputRoot.JSON.Data.results[idx].convertedAmount = ROUND(amountIn * rate, 4);
+						DECLARE convertedAmount DECIMAL ROUND(amountIn * rate, 4);
+						SET itemJson = '{"pair":"' || fromCcy || '-' || toCcy || '"'
+							|| ',"ok":true'
+							|| ',"from":"' || fromCcy || '"'
+							|| ',"to":"' || toCcy || '"'
+							|| ',"amount":' || CAST(amountIn AS CHARACTER)
+							|| ',"rate":' || CAST(rate AS CHARACTER)
+							|| ',"convertedAmount":' || CAST(convertedAmount AS CHARACTER)
+							|| '}';
 					END IF;
 				END IF;
+
+				IF NOT isFirst THEN
+					SET resultsJson = resultsJson || ',';
+				END IF;
+				SET resultsJson = resultsJson || itemJson;
+				SET isFirst = FALSE;
 			END IF;
 		END WHILE;
+
+		DECLARE bodyText CHARACTER
+			'{"cached":' || LOWER(CAST(Environment.CurrencyApi.cacheHit AS CHARACTER))
+			|| ',"baseDate":"' || Environment.CurrencyApi.ratesDate || '"'
+			|| ',"results":[' || resultsJson || ']}';
+
+		SET OutputRoot.Properties = InputRoot.Properties;
+		SET OutputRoot.Properties.MessageDomain = 'BLOB';
+		SET OutputRoot.Properties.ReplyProtocol = 'HTTP';
+		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
+		SET OutputRoot.HTTPResponseHeader."Cache-Control" = 'no-store';
+		SET OutputRoot.HTTPResponseHeader."Access-Control-Allow-Origin" = '*';
+		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 200;
+		SET OutputRoot.BLOB.BLOB = CAST(bodyText AS BLOB CCSID 1208 ENCODING 546);
 
 		RETURN TRUE;
 	END;
