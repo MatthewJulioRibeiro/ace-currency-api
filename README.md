@@ -90,4 +90,15 @@ The ACE runtime is a licensed IBM binary that can't be redistributed, so it isn'
 
 ## Deploy
 
-`.github/workflows/deploy.yml` builds the image and redeploys it over SSH on every push to `main`, onto a small Oracle Cloud "Always Free" VM — the same CI/CD pattern used across this portfolio's other repos.
+`ace-demo` is a 1 vCPU / 1GB Oracle Cloud "Always Free" VM — too tight to
+reliably run `docker build` itself (microdnf installs, unpacking the
+~2.4GB ACE runtime, `ibmint package`) without swap-thrashing for 30-40+
+minutes, occasionally past CI's own timeout. `.github/workflows/deploy.yml`
+instead cross-builds the x86_64 image on `mule-demo-arm` (an Ampere A1
+VM with spare capacity — 12GB RAM, its own app uses ~650MB) via
+`docker buildx` + QEMU emulation, capped at 1.2 CPU / 6GB on the builder
+container so it can never starve the live Mule app running alongside it,
+then ships the finished image over to `ace-demo`, which only has to
+`docker load` and restart the container — no build at all on the
+resource-constrained VM. Same CI/CD-on-push pattern as this portfolio's
+other repos otherwise.
