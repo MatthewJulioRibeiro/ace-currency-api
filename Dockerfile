@@ -16,7 +16,7 @@ RUN mkdir -p /opt/ibm/ace \
     && rm /tmp/ace-developer.tar.gz
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal
-RUN microdnf update -y && microdnf install -y findutils util-linux which tar unzip ca-certificates curl \
+RUN microdnf update -y && microdnf install -y findutils util-linux which tar unzip ca-certificates \
     && microdnf reinstall -y tzdata && microdnf clean all
 
 # Install ACE for Developers and accept its license non-interactively.
