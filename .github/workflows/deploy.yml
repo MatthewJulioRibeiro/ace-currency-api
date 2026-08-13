@@ -5,9 +5,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/ace-currency-api
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -16,6 +13,9 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        run: echo "IMAGE=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/ace-currency-api" >> "$GITHUB_ENV"
 
       - name: Set up SSH
         uses: webfactory/ssh-agent@v0.9.0
