@@ -5,9 +5,15 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/ace-currency-api
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -28,20 +34,34 @@ jobs:
       # builds; building here instead is both faster and free (unlimited
       # Actions minutes on a public repo).
       - name: Build image
-        run: docker build -t ace-currency-api:latest .
+        run: docker build -t $IMAGE:latest .
 
-      - name: Ship image to ace-demo and restart
+      # Pushed to GHCR *private* (this image bakes in IBM's licensed ACE
+      # runtime, which the README already can't commit to the repo for the
+      # same redistribution reason -- a public registry pull would be no
+      # different). A registry pull is layer-based and resumable, unlike the
+      # single raw `scp`/pipe this replaced, which kept dying mid-transfer
+      # trying to push the ~2.5GB image to ace-demo's constrained bandwidth
+      # in one shot. The ACE runtime layer doesn't change between deploys,
+      # so after the first pull, ace-demo only re-downloads the small
+      # top layers (the app BAR, ESQL, Log4j config) on future deploys.
+      - name: Push image to GitHub Container Registry
         run: |
-          docker save ace-currency-api:latest | gzip > /tmp/ace-currency-api-image.tar.gz
-          scp /tmp/ace-currency-api-image.tar.gz "${{ secrets.ACE_VM_USER }}@${{ secrets.ACE_VM_HOST }}:/tmp/ace-currency-api-image.tar.gz"
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push $IMAGE:latest
+
+      - name: Pull image on ace-demo and restart
+        run: |
+          ssh-keyscan -H "${{ secrets.ACE_VM_HOST }}" >> ~/.ssh/known_hosts
           ssh "${{ secrets.ACE_VM_USER }}@${{ secrets.ACE_VM_HOST }}" '
             set -e
-            gunzip -c /tmp/ace-currency-api-image.tar.gz | docker load
-            rm -f /tmp/ace-currency-api-image.tar.gz
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            docker pull '"$IMAGE"':latest
+            docker logout ghcr.io
             docker stop ace-currency-api-app 2>/dev/null || true
             docker rm ace-currency-api-app 2>/dev/null || true
             docker run -d --name ace-currency-api-app \
               -p 127.0.0.1:7800:7800 \
               --restart unless-stopped \
-              ace-currency-api:latest
+              '"$IMAGE"':latest
           '

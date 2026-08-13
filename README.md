@@ -98,15 +98,23 @@ GitHub Actions runner itself: it's x86_64 already (a *native* build, no
 emulation needed), free (unlimited Actions minutes on a public repo),
 and has real RAM/CPU to spare. The runner `scp`s the licensed runtime
 down from `ace-demo` at the start of the job (it can't be committed to
-the repo or the image layer cache — see below), builds, ships the
-finished image back to `ace-demo`, which just `docker load`s and
-restarts the container — no build at all on the resource-constrained VM.
+the repo or a public image layer — see below), builds, then **pushes
+the image to GitHub Container Registry** (`ghcr.io`, kept **private**
+— it bakes in IBM's licensed runtime, same reason that runtime isn't
+committed to this repo). `ace-demo` then just `docker pull`s and
+restarts — no build at all on the resource-constrained VM.
 
-(An earlier version of this pipeline cross-built on a second VM via
-QEMU emulation instead, to work around ace-demo's RAM limit without
-paying for anything. It worked, but emulation is slower than a native
-build and the long-lived SSH session for the multi-GB image export
-occasionally dropped mid-transfer. Building on the runner directly
-turned out to be strictly better on every axis once IBM's redistribution
-restriction on the runtime tarball was worked around by fetching it
-fresh each run instead of trying to cache or commit it.)
+A registry pull is layer-based and resumable, unlike a raw `scp`/pipe of
+the whole ~2.5GB image in one shot (tried first, and it kept dying
+mid-transfer on ace-demo's constrained bandwidth). It's also faster on
+every deploy after the first: the ACE runtime layer doesn't change
+between app-only changes, so `ace-demo` only re-downloads the small top
+layers (BAR file, ESQL, Log4j config) once the base layers are already
+cached locally.
+
+(Two earlier versions of this pipeline were tried and replaced: cross-
+building on a second VM via QEMU emulation — worked, but emulation is
+slower than a native build; and building natively on the runner but
+shipping the image back over a raw `scp` pipe — also worked once
+manually, but the long SSH session for a multi-GB transfer was fragile
+against ace-demo's limited bandwidth. GHCR fixes both.)
