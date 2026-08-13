@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Log4j2 config for the CurrencyApi flow's access-log node (see
+    CurrencyApi.msgflow's Log4j nodes, wired after each Build Response
+    step). One structured JSON line per request, rotated by size and time
+    and compressed on rollover, mirroring the mule-weather-api sibling
+    demo's own per-app Log4j2 setup, just reached through ACE's
+    Log4jLoggingPlugin node instead of a native Java integration.
+-->
+<Configuration status="WARN">
+    <Appenders>
+        <RollingFile name="AccessLogAppender"
+                     fileName="/home/aceuser/ace-server/logs/currency-api-access.json.log"
+                     filePattern="/home/aceuser/ace-server/logs/currency-api-access-%d{yyyy-MM-dd}-%i.json.log.gz">
+            <PatternLayout pattern="%msg%n"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="20 MB"/>
+                <TimeBasedTriggeringPolicy/>
+            </Policies>
+            <DefaultRolloverStrategy max="5"/>
+        </RollingFile>
+    </Appenders>
+    <Loggers>
+        <Logger name="CurrencyApiAccessLog" level="INFO" additivity="false">
+            <AppenderRef ref="AccessLogAppender"/>
+        </Logger>
+        <Root level="WARN">
+        </Root>
+    </Loggers>
+</Configuration>

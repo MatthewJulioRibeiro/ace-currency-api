@@ -12,7 +12,8 @@ This install's `WSRequest` node (the ACE "web services" HTTP-family; `HTTPReques
 2. **Compute (ESQL)** checks a cache of the bulk rate table (a `SHARED` ESQL variable, 10-minute TTL). A cache hit skips the fetch entirely via the node's failure terminal.
 3. **HTTP Request** (cache miss only) fetches the full EUR rate table from [Frankfurter](https://frankfurter.dev) — free, keyless.
 4. **Compute (ESQL)** triangulates the requested pair and builds the response.
-5. **HTTP Reply**. Two dedicated error-formatting Compute nodes handle client errors — missing params, unknown currency codes (400) — and upstream failures (502) instead of leaking internals.
+5. **Log4j node** writes one structured JSON line per request (endpoint, params, cache status) — see [Observability](#observability) below.
+6. **HTTP Reply**. Two dedicated error-formatting Compute nodes handle client errors — missing params, unknown currency codes (400) — and upstream failures (502) instead of leaking internals.
 
 `GET /api/currency/rates?base=USD`
 
@@ -64,6 +65,17 @@ Dockerfile                                # builds a BAR with ibmint and bundles
 ## A note on the cache
 
 `CurrencyApi_Cache.esql` is the correct, intended pattern for this kind of caching (a `SHARED` ESQL variable, reused across two flow steps so it's actually shared). Testing on this specific containerized install showed it not surviving between separate HTTP requests, though — so in practice every request currently takes the "fetch" path. The code is left as-is since it's genuinely how you'd do this on a normal ACE install; see the comment in that file for what was tried.
+
+## Observability
+
+Every successful request writes a structured JSON line (timestamp, endpoint, request params, cache status) via ACE's [Log4j node](https://github.com/ot4i/node-for-log4j) — the "IAM3" `Log4jLoggingNode` SupportPac, IBM's documented way to get real Log4j2 logging out of an ESQL-only flow (there's no Java compute node here to reach Log4j from directly). Rotated and gzip-compressed on rollover via `log4j2-access.xml`.
+
+Getting this working on this specific containerized install took some real trial and error, same spirit as the WSRequest/SHARED-variable findings above:
+
+- The Log4j node's LIL loader needs the raw `.par` file sitting in a `lilPath` directory (set in `overrides/server.conf.yaml`) — pointing it at the `.par`'s *extracted* contents instead loads the classes fine but produces a wall of non-fatal `BIP4512S` warnings, because log4j-core's own multi-release JAR layout (`META-INF/versions/9/...`) isn't multi-release-aware-loaded by ACE's classloader. Harmless (this app doesn't use any of the optional features those classes are for — async logging, XML output, OSGi), but worth knowing about if you see it in the logs.
+- The node's `logText` property reads from `Environment.Variables.Log4j.LogText` specifically (its documented default) — not just any `LocalEnvironment` path — so each Build Response ESQL module sets that exact variable before returning.
+
+Right now this writes to a local rotated file inside the container. Shipping it into a central dashboard alongside the Mule weather API's own logs is tracked separately — see [observability-stack](https://github.com/MatthewJulioRibeiro/observability-stack).
 
 ## Running it yourself
 

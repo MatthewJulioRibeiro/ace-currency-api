@@ -16,7 +16,7 @@ RUN mkdir -p /opt/ibm/ace \
     && rm /tmp/ace-developer.tar.gz
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal
-RUN microdnf update -y && microdnf install -y findutils util-linux which tar \
+RUN microdnf update -y && microdnf install -y findutils util-linux which tar unzip ca-certificates curl \
     && microdnf reinstall -y tzdata && microdnf clean all
 
 # Install ACE for Developers and accept its license non-interactively.
@@ -26,6 +26,31 @@ RUN /opt/ibm/ace/ace make registry global accept license silently \
     && chmod -R 777 /home/aceuser /var/mqsi \
     && su - aceuser -c "export LICENSE=accept && . /opt/ibm/ace/server/bin/mqsiprofile && mqsicreateworkdir /home/aceuser/ace-server" \
     && echo ". /opt/ibm/ace/server/bin/mqsiprofile" >> /home/aceuser/.bashrc
+
+# Log4j support for ESQL flows via the third-party "IAM3" Log4jLoggingNode
+# SupportPac (github.com/ot4i/node-for-log4j) -- ACE's own Java compute
+# nodes can't reach it, so this is the documented way to get real Log4j2
+# logging out of an ESQL-only flow. Public, freely downloadable, no
+# license gate (unlike the ACE runtime itself). Verified live against this
+# exact ACE version/image before wiring it in here: the LIL loader needs
+# the raw .par file sitting in a lilPath directory (not its extracted
+# contents -- that produces a different, misleading set of non-fatal
+# classloading warnings for log4j-core's own optional multi-release-jar
+# internals, e.g. async logging via LMAX Disruptor, that this app doesn't
+# use anyway).
+ARG LOG4J_NODE_VERSION=2.1.2
+RUN mkdir -p /home/aceuser/log4j-lil /tmp/iam3 \
+    && curl -fsSL -o /tmp/iam3/iam3.zip \
+       "https://github.com/ot4i/node-for-log4j/releases/download/v${LOG4J_NODE_VERSION}/iam3.zip" \
+    && unzip -o /tmp/iam3/iam3.zip -d /tmp/iam3 \
+    && cp "/tmp/iam3/Log4jLoggingNode_v${LOG4J_NODE_VERSION}.par" /home/aceuser/log4j-lil/ \
+    && rm -rf /tmp/iam3 \
+    && printf 'lilPath: /home/aceuser/log4j-lil\n' > /home/aceuser/ace-server/overrides/server.conf.yaml \
+    && chown -R aceuser:aceuser /home/aceuser/log4j-lil /home/aceuser/ace-server/overrides
+
+COPY log4j2-access.xml /home/aceuser/ace-server/log4j2-access.xml
+RUN mkdir -p /home/aceuser/ace-server/logs \
+    && chown -R aceuser:aceuser /home/aceuser/ace-server/log4j2-access.xml /home/aceuser/ace-server/logs
 
 # Package the flow into a BAR and drop it in the work directory's run/ folder,
 # which ACE auto-deploys on startup.
