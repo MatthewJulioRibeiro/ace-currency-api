@@ -10,6 +10,30 @@ CREATE COMPUTE MODULE CurrencyApi_BuildRatesResponse
 	CREATE FUNCTION Main() RETURNS BOOLEAN
 	BEGIN
 		DECLARE base CHARACTER Environment.CurrencyApi.fromCcy;
+		DECLARE correlationId CHARACTER Environment.CurrencyApi.correlationId;
+
+		-- Second-API enrichment (see CurrencyApi_BuildResponse for the
+		-- fuller explanation): cross-reference `base` against
+		-- countries.dev's bulk country/currency list, fetched via
+		-- CurrencyApi_CountriesCache elsewhere in this flow.
+		DECLARE baseCountryName CHARACTER '';
+		DECLARE baseCurrencyName CHARACTER '';
+		IF EXISTS(Environment.CurrencyApi.countries.Item[]) THEN
+			DECLARE cref REFERENCE TO Environment.CurrencyApi.countries.Item[1];
+			WHILE LASTMOVE(cref) DO
+				IF EXISTS(cref.currencies.Item[]) THEN
+					DECLARE curRef REFERENCE TO cref.currencies.Item[1];
+					WHILE LASTMOVE(curRef) DO
+						IF curRef.code = base AND baseCountryName = '' THEN
+							SET baseCountryName = cref.name;
+							SET baseCurrencyName = curRef.name;
+						END IF;
+						MOVE curRef NEXTSIBLING;
+					END WHILE;
+				END IF;
+				MOVE cref NEXTSIBLING;
+			END WHILE;
+		END IF;
 
 		DECLARE baseToEur DECIMAL 1;
 		IF base <> 'EUR' THEN
@@ -45,10 +69,16 @@ CREATE COMPUTE MODULE CurrencyApi_BuildRatesResponse
 			SET ratesJson = ratesJson || '"EUR":' || CAST(ROUND(1 / baseToEur, 6) AS CHARACTER);
 		END IF;
 
+		DECLARE enrichmentJson CHARACTER '';
+		IF baseCountryName <> '' THEN
+			SET enrichmentJson = ',"baseCountry":"' || baseCountryName || '","baseCurrencyName":"' || baseCurrencyName || '"';
+		END IF;
+
 		DECLARE bodyText CHARACTER
 			'{"base":"' || base || '"'
 			|| ',"date":"' || Environment.CurrencyApi.ratesDate || '"'
 			|| ',"cached":' || LOWER(CAST(Environment.CurrencyApi.cacheHit AS CHARACTER))
+			|| enrichmentJson
 			|| ',"rates":{' || ratesJson || '}}';
 
 		SET OutputRoot.Properties = InputRoot.Properties;
@@ -57,12 +87,16 @@ CREATE COMPUTE MODULE CurrencyApi_BuildRatesResponse
 		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
 		SET OutputRoot.HTTPResponseHeader."Cache-Control" = 'no-store';
 		SET OutputRoot.HTTPResponseHeader."Access-Control-Allow-Origin" = '*';
+		SET OutputRoot.HTTPResponseHeader."Access-Control-Expose-Headers" = 'X-Correlation-Id';
+		SET OutputRoot.HTTPResponseHeader."X-Correlation-Id" = correlationId;
 		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 200;
 		SET OutputRoot.BLOB.BLOB = CAST(bodyText AS BLOB CCSID 1208 ENCODING 546);
 
 		SET Environment.Variables.Log4j.LogText = '{"ts":"' || CAST(CURRENT_TIMESTAMP AS CHARACTER FORMAT 'yyyy-MM-dd''T''HH:mm:ss.SSS''Z''')
-			|| '","endpoint":"/api/currency/rates","base":"' || base
-			|| '","status":200,"cached":' || LOWER(CAST(Environment.CurrencyApi.cacheHit AS CHARACTER)) || '}';
+			|| '","correlationId":"' || correlationId
+			|| '","step":"access","endpoint":"/api/currency/rates","base":"' || base
+			|| '","status":200,"cached":' || LOWER(CAST(Environment.CurrencyApi.cacheHit AS CHARACTER))
+			|| ',"transaction":' || bodyText || '}';
 
 		RETURN TRUE;
 	END;

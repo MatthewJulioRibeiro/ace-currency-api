@@ -1,15 +1,25 @@
 CREATE COMPUTE MODULE CurrencyApi_UpstreamError
 	CREATE FUNCTION Main() RETURNS BOOLEAN
 	BEGIN
+		DECLARE correlationId CHARACTER COALESCE(Environment.CurrencyApi.correlationId, UUIDASCHAR);
+
 		SET OutputRoot.Properties = InputRoot.Properties;
 		SET OutputRoot.Properties.MessageDomain = 'JSON';
 		SET OutputRoot.Properties.ReplyProtocol = 'HTTP';
 		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
 		SET OutputRoot.HTTPResponseHeader."Cache-Control" = 'no-store';
 		SET OutputRoot.HTTPResponseHeader."Access-Control-Allow-Origin" = '*';
+		SET OutputRoot.HTTPResponseHeader."Access-Control-Expose-Headers" = 'X-Correlation-Id';
+		SET OutputRoot.HTTPResponseHeader."X-Correlation-Id" = correlationId;
 		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 502;
+		SET Environment.CurrencyApi.httpStatus = 502;
 		SET OutputRoot.JSON.Data.error = 'UPSTREAM_UNAVAILABLE';
 		SET OutputRoot.JSON.Data.message = 'Servico de cambio temporariamente indisponivel';
+
+		SET Environment.Variables.Log4j.LogText = '{"ts":"' || CAST(CURRENT_TIMESTAMP AS CHARACTER FORMAT 'yyyy-MM-dd''T''HH:mm:ss.SSS''Z''')
+			|| '","correlationId":"' || correlationId
+			|| '","step":"access","endpoint":"' || COALESCE(Environment.CurrencyApi.endpoint, '')
+			|| '","status":502,"error":"UPSTREAM_UNAVAILABLE"}';
 
 		RETURN TRUE;
 	END;

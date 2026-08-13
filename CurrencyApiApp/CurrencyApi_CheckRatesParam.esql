@@ -1,6 +1,9 @@
 CREATE COMPUTE MODULE CurrencyApi_CheckRatesParam
 	CREATE FUNCTION Main() RETURNS BOOLEAN
 	BEGIN
+		SET Environment.CurrencyApi.correlationId = UUIDASCHAR;
+		SET Environment.CurrencyApi.endpoint = '/api/currency/rates';
+
 		DECLARE queryString CHARACTER COALESCE(InputRoot.HTTPInputHeader."X-Query-String", '');
 		DECLARE base CHARACTER UPPER(TRIM(GetQueryParam(queryString, 'base')));
 

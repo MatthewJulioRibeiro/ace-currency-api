@@ -1,6 +1,9 @@
 CREATE COMPUTE MODULE CurrencyApi_BuildRequest
 	CREATE FUNCTION Main() RETURNS BOOLEAN
 	BEGIN
+		SET Environment.CurrencyApi.correlationId = UUIDASCHAR;
+		SET Environment.CurrencyApi.endpoint = '/api/currency';
+
 		DECLARE queryString CHARACTER COALESCE(InputRoot.HTTPInputHeader."X-Query-String", '');
 		DECLARE fromCcy CHARACTER UPPER(TRIM(GetQueryParam(queryString, 'from')));
 		DECLARE toCcy CHARACTER UPPER(TRIM(GetQueryParam(queryString, 'to')));
@@ -19,6 +22,11 @@ CREATE COMPUTE MODULE CurrencyApi_BuildRequest
 		SET Environment.CurrencyApi.fromCcy = fromCcy;
 		SET Environment.CurrencyApi.toCcy = toCcy;
 		SET Environment.CurrencyApi.amount = amountStr;
+
+		SET Environment.Variables.Log4j.LogText = '{"ts":"' || CAST(CURRENT_TIMESTAMP AS CHARACTER FORMAT 'yyyy-MM-dd''T''HH:mm:ss.SSS''Z''')
+			|| '","correlationId":"' || Environment.CurrencyApi.correlationId
+			|| '","step":"request","endpoint":"/api/currency","from":"' || fromCcy
+			|| '","to":"' || toCcy || '","amount":"' || amountStr || '"}';
 
 		RETURN TRUE;
 	END;

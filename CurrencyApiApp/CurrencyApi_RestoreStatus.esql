@@ -1,0 +1,16 @@
+CREATE COMPUTE MODULE CurrencyApi_RestoreStatus
+	-- The Log4jLoggingPlugin node (see CurrencyApi.msgflow) does not
+	-- reliably propagate OutputLocalEnvironment.Destination through its
+	-- Input/Output pass-through -- confirmed by testing: a 400/502 status
+	-- code set before the node came back as 200 after it. Error-path
+	-- ESQL modules stash the intended status in Environment.CurrencyApi.
+	-- httpStatus before logging; this node re-applies it right after,
+	-- immediately before the HTTP Reply node.
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot = InputRoot;
+		SET OutputLocalEnvironment = InputLocalEnvironment;
+		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = Environment.CurrencyApi.httpStatus;
+		RETURN TRUE;
+	END;
+END MODULE;
