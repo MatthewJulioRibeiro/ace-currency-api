@@ -111,6 +111,62 @@ paths:
                   value:
                     error: MISSING_PARAM
                     message: "Informe base (codigo ISO de moeda), ex: ?base=USD"
+  /api/currency/convert-many:
+    get:
+      summary: Convert multiple currency pairs in a single call
+      description: >
+        Triangulates every pair in "pairs" against the same cached EUR rate
+        table used by /api/currency, one upstream fetch serving the whole
+        batch. Mirrors the Mule weather API's /api/weather/compare pattern:
+        an invalid or unknown pair reports its own ok/error inline in
+        `results` instead of failing the whole request.
+      parameters:
+        - name: pairs
+          in: query
+          required: true
+          description: Comma-separated FROM-TO pairs (ISO 4217 codes).
+          schema:
+            type: string
+          example: "USD-BRL,EUR-JPY,GBP-CAD"
+        - name: amount
+          in: query
+          required: false
+          description: Amount to convert for every pair. Defaults to 1.
+          schema:
+            type: number
+          example: 100
+      responses:
+        "200":
+          description: >
+            Always 200 once at least one pair was provided -- per-pair
+            failures are reported inside `results`, not as an HTTP error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConvertManyResponse"
+              example:
+                cached: false
+                baseDate: "2026-08-11"
+                results:
+                  - pair: USD-BRL
+                    ok: true
+                    from: USD
+                    to: BRL
+                    amount: 100
+                    rate: 5.155738
+                    convertedAmount: 515.5738
+                  - pair: XXX-JPY
+                    ok: false
+                    error: UNKNOWN_CURRENCY
+        "400":
+          description: Missing the required `pairs` query param.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: MISSING_PARAM
+                message: "Informe pairs (pares FROM-TO separados por virgula), ex: ?pairs=USD-BRL,EUR-JPY&amount=100"
 components:
   schemas:
     ConversionResponse:
@@ -148,6 +204,43 @@ components:
           additionalProperties:
             type: number
           description: Currency code -> rate relative to `base`.
+    ConvertManyResponse:
+      type: object
+      required: [cached, baseDate, results]
+      properties:
+        cached:
+          type: boolean
+        baseDate:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/PairResult"
+    PairResult:
+      type: object
+      required: [pair, ok]
+      properties:
+        pair:
+          type: string
+          example: USD-BRL
+        ok:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+          enum:
+            - INVALID_PAIR
+            - UNKNOWN_CURRENCY
+        from:
+          type: string
+        to:
+          type: string
+        amount:
+          type: number
+        rate:
+          type: number
+        convertedAmount:
+          type: number
     ErrorResponse:
       type: object
       required: [error, message]

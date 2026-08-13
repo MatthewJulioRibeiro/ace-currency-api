@@ -18,6 +18,10 @@ This install's `WSRequest` node (the ACE "web services" HTTP-family; `HTTPReques
 
 Same cached bulk table, presented as a full base -> all-currencies rate list instead of a single pair.
 
+`GET /api/currency/convert-many?pairs=USD-BRL,EUR-JPY,GBP-CAD&amount=100`
+
+Triangulates every pair against the same cached bulk table in one call. Mirrors the Mule weather API's `/api/weather/compare` pattern: an invalid or unknown pair reports its own `ok`/`error` inline in `results` instead of failing the whole request.
+
 No API keys anywhere — Frankfurter is free and keyless. CORS is open (`Access-Control-Allow-Origin: *`) so both endpoints can be called straight from a browser — see the live demo widget on [matheusribeiro.dev.br](https://matheusribeiro.dev.br).
 
 Interactive API docs (Swagger UI, self-hosted): [ace-demo.matheusribeiro.dev.br/docs/](https://ace-demo.matheusribeiro.dev.br/docs/) — spec source at [`docs/openapi.yaml`](docs/openapi.yaml).
@@ -42,12 +46,14 @@ curl "https://ace-demo.matheusribeiro.dev.br/api/currency?from=USD&to=BRL&amount
 
 ```
 CurrencyApiApp/
-  CurrencyApi.msgflow                    # the message flow: two HTTP Input paths sharing cache/error nodes
+  CurrencyApi.msgflow                    # the message flow: three HTTP Input paths sharing cache/error nodes
   CurrencyApi_BuildRequest.esql          # validates from/to/amount
   CurrencyApi_CheckRatesParam.esql       # validates base (for /rates)
+  CurrencyApi_CheckPairsParam.esql       # validates pairs/amount (for /convert-many)
   CurrencyApi_Cache.esql                 # SHARED-variable cache, reused as both the check and write step
   CurrencyApi_BuildResponse.esql         # triangulates the requested pair, builds the /currency response
   CurrencyApi_BuildRatesResponse.esql    # builds the /rates response (hand-built JSON string -- see file comment)
+  CurrencyApi_BuildManyResponse.esql     # triangulates every pair for /convert-many, one upstream fetch
   CurrencyApi_MissingParamError.esql     # 400 error path
   CurrencyApi_UpstreamError.esql         # 502 error path
   application.descriptor, .project       # ACE application project metadata

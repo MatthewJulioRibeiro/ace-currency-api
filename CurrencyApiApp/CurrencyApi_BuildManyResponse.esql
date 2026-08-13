@@ -1,0 +1,90 @@
+CREATE COMPUTE MODULE CurrencyApi_BuildManyResponse
+	-- Mirrors CurrencyApi_BuildResponse's triangulation (rate(from,to) =
+	-- eur[to] / eur[from]) against the same cached bulk table, just once
+	-- per pair in "pairs=USD-BRL,EUR-JPY,..." instead of once per request.
+	-- An invalid or unknown pair reports its own ok/error inline in
+	-- "results" -- same pattern as the Mule weather API's /compare
+	-- endpoint -- instead of failing the whole batch.
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		DECLARE amountIn DECIMAL CAST(Environment.CurrencyApi.amount AS DECIMAL);
+		DECLARE remaining CHARACTER Environment.CurrencyApi.pairsRaw;
+		DECLARE idx INTEGER 0;
+		DECLARE commaPos INTEGER;
+		DECLARE token CHARACTER;
+
+		SET OutputRoot.Properties = InputRoot.Properties;
+		SET OutputRoot.Properties.MessageDomain = 'JSON';
+		SET OutputRoot.Properties.ReplyProtocol = 'HTTP';
+		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
+		SET OutputRoot.HTTPResponseHeader."Cache-Control" = 'no-store';
+		SET OutputRoot.HTTPResponseHeader."Access-Control-Allow-Origin" = '*';
+		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 200;
+		SET OutputRoot.JSON.Data.cached = Environment.CurrencyApi.cacheHit;
+		SET OutputRoot.JSON.Data.baseDate = Environment.CurrencyApi.ratesDate;
+
+		WHILE LENGTH(TRIM(remaining)) > 0 DO
+			SET commaPos = POSITION(',' IN remaining);
+			IF commaPos = 0 THEN
+				SET token = TRIM(remaining);
+				SET remaining = '';
+			ELSE
+				SET token = TRIM(SUBSTRING(remaining FROM 1 FOR commaPos - 1));
+				SET remaining = SUBSTRING(remaining FROM commaPos + 1);
+			END IF;
+
+			IF LENGTH(token) > 0 THEN
+				SET idx = idx + 1;
+
+				DECLARE dashPos INTEGER POSITION('-' IN token);
+				DECLARE fromCcy CHARACTER '';
+				DECLARE toCcy CHARACTER '';
+				IF dashPos > 0 THEN
+					SET fromCcy = UPPER(TRIM(SUBSTRING(token FROM 1 FOR dashPos - 1)));
+					SET toCcy = UPPER(TRIM(SUBSTRING(token FROM dashPos + 1)));
+				END IF;
+
+				IF fromCcy = '' OR toCcy = '' THEN
+					SET OutputRoot.JSON.Data.results[idx].pair = token;
+					SET OutputRoot.JSON.Data.results[idx].ok = FALSE;
+					SET OutputRoot.JSON.Data.results[idx].error = 'INVALID_PAIR';
+				ELSE
+					DECLARE fromToEur DECIMAL 1;
+					DECLARE toToEur DECIMAL 1;
+					DECLARE foundFrom BOOLEAN (fromCcy = 'EUR');
+					DECLARE foundTo BOOLEAN (toCcy = 'EUR');
+
+					DECLARE ref REFERENCE TO Environment.CurrencyApi.rates.*[1];
+					WHILE LASTMOVE(ref) DO
+						IF FIELDNAME(ref) = fromCcy THEN
+							SET fromToEur = CAST(FIELDVALUE(ref) AS DECIMAL);
+							SET foundFrom = TRUE;
+						END IF;
+						IF FIELDNAME(ref) = toCcy THEN
+							SET toToEur = CAST(FIELDVALUE(ref) AS DECIMAL);
+							SET foundTo = TRUE;
+						END IF;
+						MOVE ref NEXTSIBLING;
+					END WHILE;
+
+					IF NOT foundFrom OR NOT foundTo THEN
+						SET OutputRoot.JSON.Data.results[idx].pair = fromCcy || '-' || toCcy;
+						SET OutputRoot.JSON.Data.results[idx].ok = FALSE;
+						SET OutputRoot.JSON.Data.results[idx].error = 'UNKNOWN_CURRENCY';
+					ELSE
+						DECLARE rate DECIMAL ROUND(toToEur / fromToEur, 6);
+						SET OutputRoot.JSON.Data.results[idx].pair = fromCcy || '-' || toCcy;
+						SET OutputRoot.JSON.Data.results[idx].ok = TRUE;
+						SET OutputRoot.JSON.Data.results[idx].from = fromCcy;
+						SET OutputRoot.JSON.Data.results[idx].to = toCcy;
+						SET OutputRoot.JSON.Data.results[idx].amount = amountIn;
+						SET OutputRoot.JSON.Data.results[idx].rate = rate;
+						SET OutputRoot.JSON.Data.results[idx].convertedAmount = ROUND(amountIn * rate, 4);
+					END IF;
+				END IF;
+			END IF;
+		END WHILE;
+
+		RETURN TRUE;
+	END;
+END MODULE;
