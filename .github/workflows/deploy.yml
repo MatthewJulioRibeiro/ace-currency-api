@@ -93,4 +93,13 @@ jobs:
               -p 127.0.0.1:7600:7600 \
               --restart unless-stopped \
               '"$IMAGE"':latest
+            # Each deploy overwrites the local :latest tag, leaving the
+            # previous version'"'"'s layers dangling (untagged, unreferenced by
+            # any container). This VM is small (45GB disk) and those add up
+            # fast -- left unpruned, this is exactly what silently filled the
+            # disk to 95% and caused a real deploy failure (see PROGRESS.md,
+            # 2026-08-14). `docker image prune -f` (no -a) only removes
+            # dangling images, never the one the running container actually
+            # uses, so this is safe to run unconditionally after every deploy.
+            docker image prune -f
           '
