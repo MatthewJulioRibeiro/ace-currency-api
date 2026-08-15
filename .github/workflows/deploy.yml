@@ -28,27 +28,45 @@ jobs:
           ssh-keyscan -H "${{ secrets.ACE_VM_HOST }}" >> ~/.ssh/known_hosts
           scp "${{ secrets.ACE_VM_USER }}@${{ secrets.ACE_VM_HOST }}:~/ace-runtime/ace-developer.tar.gz" runtime/ace-developer.tar.gz
 
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       # GitHub-hosted runners are x86_64 already -- this is a *native* build,
       # no QEMU emulation needed. ace-demo (1 vCPU/1GB) used to run this
       # `docker build` itself and reliably swap-thrashed into 30-40+ minute
       # builds; building here instead is both faster and free (unlimited
       # Actions minutes on a public repo).
-      - name: Build image
-        run: docker build -t $IMAGE:latest .
-
+      #
+      # Runners are ephemeral (no local Docker cache survives between runs),
+      # so a plain `docker build` re-executes every instruction from scratch
+      # each deploy -- including the ~2.4GB runtime-extraction layer, even
+      # though its input (the licensed tarball) never changes. That produced
+      # a *new* layer digest every time, defeating the "layer-based, only
+      # re-download what changed" pull on ace-demo the comment below used to
+      # promise. `--cache-from`/`--cache-to type=registry` fixes this for
+      # real: the build cache itself is stored in GHCR (as `:buildcache`),
+      # so a cache-hit step reuses the exact same layer digest as last time
+      # -- which is what actually lets both the GHCR push and ace-demo's
+      # pull skip re-transferring it. `mode=max` is required (not the
+      # default `mode=min`) because the runtime extraction happens in the
+      # discarded `builder` stage of this multi-stage Dockerfile; `min` only
+      # caches layers that end up in the final image.
+      #
       # Pushed to GHCR *private* (this image bakes in IBM's licensed ACE
       # runtime, which the README already can't commit to the repo for the
       # same redistribution reason -- a public registry pull would be no
-      # different). A registry pull is layer-based and resumable, unlike the
-      # single raw `scp`/pipe this replaced, which kept dying mid-transfer
-      # trying to push the ~2.5GB image to ace-demo's constrained bandwidth
-      # in one shot. The ACE runtime layer doesn't change between deploys,
-      # so after the first pull, ace-demo only re-downloads the small
-      # top layers (the app BAR, ESQL, Log4j config) on future deploys.
-      - name: Push image to GitHub Container Registry
+      # different).
+      - name: Build and push image
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          docker push $IMAGE:latest
+          docker buildx build \
+            --cache-from type=registry,ref=$IMAGE:buildcache \
+            --cache-to type=registry,ref=$IMAGE:buildcache,mode=max \
+            -t $IMAGE:latest \
+            --push \
+            .
 
       - name: Pull image on ace-demo and restart
         # ServerAliveInterval/CountMax: ace-demo is a 1GB VM that swap-thrashes
