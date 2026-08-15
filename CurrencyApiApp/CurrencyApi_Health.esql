@@ -1,0 +1,22 @@
+CREATE COMPUTE MODULE CurrencyApi_Health
+	-- Dedicated liveness ping for the portfolio site's "is this demo up"
+	-- status dot (see main.js's checkDemoStatus). That dot used to poll
+	-- /api/currency with no params, which "worked" (a 4xx still proves
+	-- the service is alive) but meant every single page view logged a
+	-- real MISSING_PARAM client error -- ~50 fake errors a day drowning
+	-- out genuine ones. This route does nothing but reply 200: no cache
+	-- lookup, no upstream call, no Log4j line, so a health check never
+	-- touches the access log at all.
+	CREATE FUNCTION Main() RETURNS BOOLEAN
+	BEGIN
+		SET OutputRoot.Properties = InputRoot.Properties;
+		SET OutputRoot.Properties.MessageDomain = 'JSON';
+		SET OutputRoot.Properties.ReplyProtocol = 'HTTP';
+		SET OutputRoot.HTTPResponseHeader."Content-Type" = 'application/json';
+		SET OutputRoot.HTTPResponseHeader."Cache-Control" = 'no-store';
+		SET OutputRoot.HTTPResponseHeader."Access-Control-Allow-Origin" = '*';
+		SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode = 200;
+		SET OutputRoot.JSON.Data.status = 'ok';
+		RETURN TRUE;
+	END;
+END MODULE;

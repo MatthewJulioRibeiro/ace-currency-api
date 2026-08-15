@@ -106,6 +106,15 @@
         <translation xmi:type="utility:ConstantString" string="Build convert-many response"/>
       </nodes>
 
+      <!-- GET /health: dedicated liveness ping, see CurrencyApi_Health.esql
+           for why this exists as its own route instead of reusing /api/currency. -->
+      <nodes xmi:type="ComIbmWSInput.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_400" location="10,1050" URLSpecifier="/health" messageDomainProperty="JSON">
+        <translation xmi:type="utility:ConstantString" string="HTTP Input (health)"/>
+      </nodes>
+      <nodes xmi:type="ComIbmCompute.msgnode:FCMComposite_1" xmi:id="FCMComposite_1_401" location="150,1050" computeExpression="esql://routine/#CurrencyApi_Health.Main">
+        <translation xmi:type="utility:ConstantString" string="Health check"/>
+      </nodes>
+
       <!-- final access-log nodes: one per endpoint, wired between "Build ...
            Response" and the shared HTTP Reply. Each Build-Response ESQL
            module already sets Environment.Variables.Log4j.LogText with
@@ -227,6 +236,11 @@
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_8b" targetNode="FCMComposite_1_73" sourceNode="FCMComposite_1_5" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.Input"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_9" targetNode="FCMComposite_1_6" sourceNode="FCMComposite_1_7" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
       <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_9b" targetNode="FCMComposite_1_73" sourceNode="FCMComposite_1_7" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.Input"/>
+
+      <!-- /health wiring: straight to the shared HTTP Reply, bypassing
+           every cache/upstream/Log4j node entirely -->
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_400" targetNode="FCMComposite_1_401" sourceNode="FCMComposite_1_400" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
+      <connections xmi:type="eflow:FCMConnection" xmi:id="FCMConnection_401" targetNode="FCMComposite_1_6" sourceNode="FCMComposite_1_401" sourceTerminalName="OutTerminal.out" targetTerminalName="InTerminal.in"/>
     </composition>
     <propertyOrganizer/>
     <stickyBoard/>
