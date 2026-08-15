@@ -59,7 +59,10 @@ RUN mkdir -p /home/aceuser/ace-server/run \
     && chown -R aceuser:aceuser /tmp/CurrencyApiApp /home/aceuser/ace-server/run \
     && su - aceuser -c "ibmint package --input-path /tmp/CurrencyApiApp --output-bar-file /home/aceuser/ace-server/run/CurrencyApi.bar"
 
+COPY docker-entrypoint.sh /home/aceuser/docker-entrypoint.sh
+RUN chown aceuser:aceuser /home/aceuser/docker-entrypoint.sh && chmod +x /home/aceuser/docker-entrypoint.sh
+
 USER 1001
 EXPOSE 7600 7800 7843
 ENV ACE_SERVER_NAME=ace-server
-ENTRYPOINT ["bash", "-c", ". /opt/ibm/ace/server/bin/mqsiprofile && IntegrationServer --name ${ACE_SERVER_NAME} -w /home/aceuser/ace-server"]
+ENTRYPOINT ["/home/aceuser/docker-entrypoint.sh"]
