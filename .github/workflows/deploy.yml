@@ -3,6 +3,13 @@ name: Build and deploy
 on:
   push:
     branches: [main]
+    # Docs/tests never touch the deployed BAR file, but every push here costs
+    # a full rebuild + a live restart on a 1GB VM (observed: up to ~46min and
+    # a real outage window under memory pressure) -- not worth paying for a
+    # README or test-script edit.
+    paths-ignore:
+      - "**.md"
+      - "test/**"
   workflow_dispatch:
 
 jobs:
