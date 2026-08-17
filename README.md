@@ -92,6 +92,19 @@ The ACE runtime is a licensed IBM binary that can't be redistributed, so it isn'
 
 "For Developers" is IBM's free, non-time-boxed edition for non-production use — appropriate for a personal portfolio demo like this one.
 
+The parent folder's [`docker-compose.local.yml`](../docker-compose.local.yml) builds this app alongside `mule-weather-api` and the full observability stack in one command, wired the same way production is (logs shipped to the same local Elasticsearch) — see that file's header comment for the exact command.
+
+## Testing
+
+ESQL has no unit-test framework reachable outside the full IBM Integration Toolkit (GUI-only; every flow in this repo has always been hand-authored against the trimmed "ace-developer" runtime, no Toolkit involved). So instead, [`test/api-contract-test.mjs`](test/api-contract-test.mjs) is a small black-box HTTP contract test — zero dependencies (Node's built-in `fetch`), asserting on the real JSON responses (including the `error` field, since this install's `WSReply` never honours a non-200 status code — see below).
+
+```bash
+node test/api-contract-test.mjs                      # against localhost:7800 (docker-compose.local.yml)
+BASE_URL=https://ace-demo.matheusribeiro.dev.br node test/api-contract-test.mjs   # against production
+```
+
+Not yet wired into CI — see the sibling `mule-weather-api` repo for how a similar test job could gate the `deploy.yml` pipeline before the build/push step, using the runtime tarball that step already fetches from `ace-demo`.
+
 ## Deploy
 
 `ace-demo` is a 1 vCPU / 1GB Oracle Cloud "Always Free" VM — too tight to
